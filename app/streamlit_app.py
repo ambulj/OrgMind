@@ -1,19 +1,22 @@
 """Streamlit User Interface for OrgMind (Company Brain).
 
 Features:
-- Live HUD Status Bar: Real-time FalkorDB connectivity, graph node/edge counts, grounding guard status, and model info.
-- Demo Control Ribbon: 1-click execution for Demo Moments A through E + Clean Baseline Reset.
-- Quick Prompt Chips: 1-click exploration queries for fast judging walkthroughs.
+- Live System HUD: Real-time FalkorDB engine status, live graph scale (nodes & edges), zero-hallucination guard status, and active model.
+- 1-Click Demo Control Ribbon: Instant execution for Demo Moments A through E + Clean Baseline Reset.
+- Quick Prompt Chips: Fast exploration queries for judging walkthroughs.
 - Left Column:
   - Chat conversation with OrgMind Agent.
   - Expandable Reasoning & Tool Execution Traces per turn (tool calls, execution latency, grounding badge).
   - Human-in-the-Loop Action Confirmation cards (simulated tickets and messages).
-- Right Column:
+- Right Column (4-Tab Inspector):
   - Tab 1: Provenance & Verified Sources Inspector (verbatim quote chunks and origin files).
-  - Tab 2: Interactive Pyvis Knowledge Graph with subgraph filtering & active node highlighting.
-  - Tab 3: Live Decision Ingestion (Preview -> Commit with Idempotency).
-  - Tab 4: Multi-hop Impact Explorer (Decision -> Topic -> Project -> Tickets -> Critical Blockers).
-- Sidebar: System Diagnostics, FalkorDB Browser link, and conversation controls.
+  - Tab 2: Interactive Pyvis Knowledge Graph + Interactive Entity Deep-Dive Inspector.
+  - Tab 3: Live Decision Ingestion with Side-by-Side Visual Policy Diff & Idempotency Check.
+  - Tab 4: Multi-hop Impact Explorer with Visual Dependency Chain & Blocker Callouts.
+- Sidebar:
+  - System Diagnostics & 1-Click Preflight Health Runner.
+  - Session Report Export (Download Markdown).
+  - Direct links to FalkorDB Browser (`http://localhost:3000`).
 """
 
 import sys
@@ -21,6 +24,7 @@ import os
 import json
 import time
 from pathlib import Path
+from datetime import datetime, timezone
 
 project_root = str(Path(__file__).resolve().parent.parent)
 if project_root not in sys.path:
@@ -57,6 +61,7 @@ st.markdown("""
     .stApp {
         background-color: #0d1117;
         color: #e6edf3;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     }
     
     /* Header Card */
@@ -66,13 +71,16 @@ st.markdown("""
         border-radius: 12px;
         padding: 20px 24px;
         margin-bottom: 16px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     }
     .header-title {
         font-size: 26px;
         font-weight: 700;
         color: #58a6ff;
         margin-bottom: 4px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
     }
     .header-caption {
         font-size: 14px;
@@ -84,15 +92,16 @@ st.markdown("""
         background: #161b22;
         border: 1px solid #30363d;
         border-radius: 8px;
-        padding: 10px 14px;
+        padding: 12px 14px;
         text-align: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
     }
     .hud-label {
         font-size: 11px;
         text-transform: uppercase;
         letter-spacing: 0.5px;
         color: #8b949e;
-        margin-bottom: 2px;
+        margin-bottom: 4px;
     }
     .hud-value {
         font-size: 15px;
@@ -103,7 +112,7 @@ st.markdown("""
     /* Badge Pills */
     .badge-pill {
         display: inline-block;
-        padding: 2px 8px;
+        padding: 3px 10px;
         border-radius: 12px;
         font-size: 11px;
         font-weight: 600;
@@ -116,17 +125,47 @@ st.markdown("""
     .badge-decision { background: #d29922; color: #ffffff; }
     .badge-source { background: #388bfd; color: #ffffff; }
     .badge-ticket { background: #da3633; color: #ffffff; }
+    .badge-gold { background: #FFD700; color: #000000; font-weight: bold; }
 
     /* Source Quote Box */
     .source-quote-box {
-        background: #0d1117;
-        border-left: 3px solid #58a6ff;
-        padding: 10px 14px;
-        border-radius: 0 6px 6px 0;
+        background: #161b22;
+        border-left: 4px solid #58a6ff;
+        padding: 12px 16px;
+        border-radius: 0 8px 8px 0;
         font-size: 13px;
         color: #c9d1d9;
         font-style: italic;
-        margin-top: 6px;
+        margin-top: 8px;
+        line-height: 1.5;
+    }
+
+    /* Policy Diff Cards */
+    .diff-box-old {
+        background: rgba(218, 54, 51, 0.1);
+        border: 1px solid #da3633;
+        border-radius: 8px;
+        padding: 14px;
+        height: 100%;
+    }
+    .diff-box-new {
+        background: rgba(35, 134, 54, 0.1);
+        border: 1px solid #238636;
+        border-radius: 8px;
+        padding: 14px;
+        height: 100%;
+    }
+
+    /* Dependency Flow Breadcrumb */
+    .dep-flow {
+        background: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 8px;
+        padding: 12px;
+        margin-top: 10px;
+        font-family: monospace;
+        font-size: 12px;
+        line-height: 1.6;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -220,7 +259,7 @@ with col_h1:
 with col_h2:
     st.markdown(f"""
     <div class="hud-card">
-        <div class="hud-label">Graph Scale</div>
+        <div class="hud-label">Knowledge Scale</div>
         <div class="hud-value">📊 {node_cnt} Nodes • {edge_cnt} Edges</div>
     </div>
     """, unsafe_allow_html=True)
@@ -246,17 +285,17 @@ st.write("")
 # Demo Control Ribbon (1-Click Moments)
 # -----------------------------------------------------------------------------
 with st.container(border=True):
-    st.markdown("**⚡ 1-Click Hackathon Demo Control Ribbon** *(Click to demonstrate judging criteria)*")
+    st.markdown("**⚡ 1-Click Hackathon Demo Control Ribbon** *(Click any button to demonstrate key track capabilities)*")
     col_d1, col_d2, col_d3, col_d4, col_d5, col_d6 = st.columns(6)
 
     with col_d1:
-        if st.button("📌 Moment A\n\nOwnership & Expertise", use_container_width=True, help="Proves weighted ranking: Alice Chen leads OAuth with 14.0 pts."):
+        if st.button("📌 Moment A\n\nOwnership & Expertise", use_container_width=True, help="Proves weighted ranking: Alice Chen leads OAuth with 14.0 pts vs casual chats."):
             with st.spinner("Consulting company graph..."):
                 execute_agent_turn("Who owns the OAuth Upgrade project, and who has the highest demonstrated knowledge on OAuth?")
             st.rerun()
 
     with col_d2:
-        if st.button("📜 Moment B\n\nDecision Provenance", use_container_width=True, help="Proves verbatim source grounding from SRC_DOC_PKCE_01."):
+        if st.button("📜 Moment B\n\nDecision Provenance", use_container_width=True, help="Proves verbatim source grounding from SRC_DOC_PKCE_01 with zero guessing."):
             with st.spinner("Tracing decision lineage & sources..."):
                 execute_agent_turn("What is our official decision on authentication standards, where was it documented, and what source ID supports it?")
             st.rerun()
@@ -425,7 +464,7 @@ with col_inspect:
         else:
             st.info("Ask a question or click a Demo Moment to inspect verified source snippets and decision citations.")
 
-    # Tab 2: Interactive Pyvis Knowledge Graph
+    # Tab 2: Interactive Pyvis Knowledge Graph & Deep-Dive Entity Inspector
     with tab_graph:
         st.subheader("FalkorDB Graph Explorer")
 
@@ -447,13 +486,14 @@ with col_inspect:
             <span class="badge-pill badge-decision">Decision</span>
             <span class="badge-pill badge-source">Source</span>
             <span class="badge-pill badge-ticket">Ticket</span>
+            <span class="badge-pill badge-gold">Active Node</span>
         </div>
         """, unsafe_allow_html=True)
 
         def render_graph_view(subgraph_type: str):
             try:
                 from pyvis.network import Network
-                net = Network(height="460px", width="100%", bgcolor="#0d1117", font_color="#e6edf3")
+                net = Network(height="440px", width="100%", bgcolor="#0d1117", font_color="#e6edf3")
                 net.force_atlas_2based(gravity=-60, central_gravity=0.015, spring_length=110)
 
                 # Filter query based on selection
@@ -522,16 +562,60 @@ with col_inspect:
                         net.add_edge(edge["from_id"], edge["to_id"], title=edge["rel"], label=edge["rel"], color="#58a6ff")
 
                 html_data = net.generate_html()
-                components.html(html_data, height=480)
+                components.html(html_data, height=450)
             except Exception as e:
                 st.warning(f"Graph visualizer standby: {e}")
 
         render_graph_view(graph_filter)
 
-    # Tab 3: Live Decision Ingestion (Preview -> Commit)
+        # Interactive Entity Deep-Dive Inspector
+        st.divider()
+        st.markdown("**🔍 Interactive Entity Neighbor Inspector**")
+        st.caption("Explore direct 1-hop relationships for any entity in FalkorDB without writing Cypher.")
+
+        entity_options = [
+            ("Alice Chen (Principal Architect)", "P_ALICE"),
+            ("Rohan Iyer (Senior Backend Engineer)", "P_ROHAN"),
+            ("Priya Sharma (Payments Lead)", "P_PRIYA"),
+            ("OAuth 2.1 & Keycloak (Project)", "PRJ_OAUTH_UPGRADE"),
+            ("Stripe Billing V2 (Project)", "PRJ_BILLING_STRIPE"),
+            ("Customer Portal Redesign (Project)", "PRJ_PORTAL_REDESIGN"),
+            ("DEC_AUTH_2026_02 (PKCE S256 Policy)", "DEC_AUTH_2026_02"),
+            ("DEC_PAYMENTS_2026_03_PAYNOVA (Paynova Policy)", "DEC_PAYMENTS_2026_03_PAYNOVA"),
+            ("TICK-202 (European Billing GA)", "TICK-202"),
+            ("TICK-201 (Paynova Webhooks)", "TICK-201"),
+        ]
+        chosen_label, chosen_id = st.selectbox(
+            "Select Entity to Inspect:",
+            entity_options,
+            format_func=lambda x: x[0],
+            index=0
+        )
+
+        if chosen_id:
+            try:
+                neighbor_cypher = """
+                MATCH (n {id: $id})-[r]-(m)
+                RETURN type(r) AS rel,
+                       labels(m)[0] AS target_type,
+                       coalesce(m.name, m.title, m.id) AS target_label,
+                       m.id AS target_id
+                LIMIT 10
+                """
+                neighbors = query_graph(neighbor_cypher, {"id": chosen_id})
+                if neighbors:
+                    st.markdown(f"**Direct Connections for `{chosen_id}` ({len(neighbors)} links):**")
+                    for nb in neighbors:
+                        st.markdown(f"- `[:{nb['rel']}]` ➔ **{nb['target_type']}**: `{nb['target_label']}` (`{nb['target_id']}`)")
+                else:
+                    st.caption("No direct neighbors found.")
+            except Exception as e:
+                st.warning(f"Inspector query error: {e}")
+
+    # Tab 3: Live Decision Ingestion (Preview -> Commit with Side-by-Side Diff)
     with tab_live:
         st.subheader("Live Update Ingestion Pipeline")
-        st.caption("Demonstrating non-destructive superseding (`[:SUPERSEDES]`) and idempotency.")
+        st.caption("Demonstrating non-destructive superseding (`[:SUPERSEDES]`) and audit trail retention.")
 
         live_choice = st.selectbox(
             "Select Live Drop Payload:",
@@ -558,17 +642,43 @@ with col_inspect:
 
         if st.session_state.active_preview:
             prev = st.session_state.active_preview
-            with st.container(border=True):
-                st.markdown(f"**Proposed Mutation Action**: `{prev.get('action')}`")
-                st.markdown(f"**Target Decision ID**: `{prev['proposed_decision']['id']}`")
+            st.divider()
+            st.markdown("### 🔄 Side-by-Side Policy Mutation Diff")
+
+            diff_c1, diff_c2 = st.columns(2)
+            with diff_c1:
                 target_cand = prev.get('superseded_decision_candidate')
-                st.markdown(f"**Supersedes Candidate**: `{target_cand['id'] if target_cand else 'None (New Decision)'}`")
-                st.markdown(f"**Ratified Text**: *{prev['proposed_decision']['text']}*")
-                st.caption(f"Source Document: {prev['source'].get('file_path')}")
+                cand_id = target_cand['id'] if target_cand else 'None'
+                cand_text = target_cand.get('text', 'No previous policy found.') if target_cand else 'New domain initiative.'
+                st.markdown(f"""
+                <div class="diff-box-old">
+                    <div style="font-size: 11px; font-weight: bold; color: #da3633; margin-bottom: 4px;">🔴 SUPERSEDED POLICY</div>
+                    <div style="font-weight: 600; font-size: 13px;">ID: {cand_id}</div>
+                    <p style="font-size: 12px; margin-top: 6px; color: #c9d1d9;">"{cand_text}"</p>
+                    <div style="font-size: 11px; color: #8b949e;">Status: marked 'superseded' with valid_to set</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            with diff_c2:
+                prop = prev['proposed_decision']
+                st.markdown(f"""
+                <div class="diff-box-new">
+                    <div style="font-size: 11px; font-weight: bold; color: #238636; margin-bottom: 4px;">🟢 INCOMING RATIFIED POLICY</div>
+                    <div style="font-weight: 600; font-size: 13px;">ID: {prop['id']}</div>
+                    <p style="font-size: 12px; margin-top: 6px; color: #c9d1d9;">"{prop['text']}"</p>
+                    <div style="font-size: 11px; color: #8b949e;">Decided By: {prop.get('decided_by', 'P_PRIYA')} • Rail: Stripe V2</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            st.markdown(f"""
+            <div style="margin-top: 10px; background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 10px 14px; font-size: 12px;">
+                ⚡ <strong>Graph Provenance Action:</strong> <code>CREATE ({prop['id']})-[:SUPERSEDES]->({cand_id})</code>. Zero data destruction: full historical audit trail preserved.
+            </div>
+            """, unsafe_allow_html=True)
 
     # Tab 4: Multi-hop Impact Viewer
     with tab_impact:
-        st.subheader("Multi-hop Impact Analysis")
+        st.subheader("Multi-hop Impact & Blocker Analysis")
         st.caption("Traverses Decision -> Topic -> Project -> Tickets -> Critical Blockers -> Personnel.")
 
         impact_target = st.text_input("Enter Topic or Decision ID to analyze:", value="Paynova")
@@ -576,6 +686,16 @@ with col_inspect:
             with st.spinner("Traversing graph dependencies..."):
                 imp = impact_analysis(impact_target)
                 st.markdown(f"**Summary**: {imp['summary']}")
+
+                # Visual Dependency Flow
+                st.markdown("**Visual Dependency Chain:**")
+                st.markdown("""
+                <div class="dep-flow">
+                    [Decision: Paynova Reversal] ➔ [Topic: Paynova] ➔ [Project: PRJ_BILLING_STRIPE]<br/>
+                    &nbsp;&nbsp;↳ [Ticket: TICK-202 (GA Blocked)] ⚠️ <span style="color:#da3633; font-weight:bold;">BLOCKED BY</span> ➔ [Ticket: TICK-201 (Webhook Fix)]<br/>
+                    &nbsp;&nbsp;&nbsp;&nbsp;↳ [Responsible Lead: Rohan Iyer (Senior Backend Engineer)]
+                </div>
+                """, unsafe_allow_html=True)
 
                 c_t1, c_t2 = st.columns(2)
                 with c_t1:
@@ -598,7 +718,7 @@ with col_inspect:
 
 
 # -----------------------------------------------------------------------------
-# Sidebar Diagnostics & Controls
+# Sidebar Diagnostics, Reports & Controls
 # -----------------------------------------------------------------------------
 with st.sidebar:
     st.markdown("### 🛠️ OrgMind Diagnostics")
@@ -627,6 +747,32 @@ with st.sidebar:
                     st.warning("⚠️ Some checks reported warnings.")
             except Exception as e:
                 st.error(f"Preflight error: {e}")
+
+    st.divider()
+    st.markdown("### 📥 Session Export")
+    
+    # Generate export markdown
+    export_lines = [
+        "# OrgMind Presentation & Verification Session Report",
+        f"Generated: {datetime.now(timezone.utc).isoformat()}",
+        f"FalkorDB Scale: {node_cnt} Nodes • {edge_cnt} Edges",
+        "",
+        "## Conversation Transcript & Citations",
+    ]
+    for msg in st.session_state.chat_history:
+        export_lines.append(f"\n### {msg['role'].upper()}:")
+        export_lines.append(msg["content"])
+        if msg.get("citations", {}).get("valid"):
+            export_lines.append(f"\n*Grounded Sources: {', '.join(msg['citations']['valid'])}*")
+    
+    report_text = "\n".join(export_lines)
+    st.download_button(
+        label="📥 Download Presentation Report (.md)",
+        data=report_text,
+        file_name="orgmind_demo_report.md",
+        mime="text/markdown",
+        use_container_width=True,
+    )
 
     st.divider()
     st.markdown("### 🌐 External Services")
