@@ -1,19 +1,19 @@
-# Decision Record: Billing Engine & Payment Gateway
+# Decision Record: Core US Billing Engine & Stripe Checkout
 
 - **Document ID**: DOC_BILLING_SPEC
 - **Author**: Bob Martinez (Tech Lead Backend)
 - **Date**: 2026-01-20
-- **Status**: Historical (See live update)
+- **Project**: PRJ_BILLING_STRIPE
+- **Status**: Current
 
 ## Problem Statement
-Our in-house credit card processor has high maintenance overhead and lacks multi-currency support for our EU expansion.
+Legacy credit card storage violates modern PCI requirements and lacks modern fraud detection for Northwind Labs US subscriptions.
 
-## Decision: Adopt Stripe Elements with Custom Webhook Queue
+## Decision: Adopt Stripe Elements for US Checkout
 On 2026-01-20, Bob Martinez and Carol Danvers decided:
-1. We will use Stripe Elements for the frontend checkout flow.
-2. We will handle webhook events using an in-memory Redis FIFO queue.
-3. Database chosen for transaction reconciliation is PostgreSQL.
+1. We will use Stripe Elements for the frontend US subscription flow.
+2. Webhooks will be dispatched to an asynchronous queue with idempotency tracking.
 
-## Ownership
-- **Lead Engineer**: Bob Martinez (@bob)
-- **Product Manager**: Carol Danvers (@carol)
+## Provenance
+- Source ID: `SRC_DOC_BILL_01`
+- Decision ratified by: Bob Martinez and Carol Danvers

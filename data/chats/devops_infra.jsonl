@@ -1,0 +1,15 @@
+{"id": "MSG_INFRA_001", "channel": "#devops-infra", "timestamp": "2026-02-04T09:00:00Z", "author": "david", "text": "Drafting multi-region disaster recovery topology for Kubernetes. Goal is RPO < 1m, RTO < 5m."}
+{"id": "MSG_INFRA_002", "channel": "#devops-infra", "timestamp": "2026-02-05T10:15:00Z", "author": "@alice", "text": "Reviewed DOC_K8S_SPEC. Active-passive topology with eu-central-1 standby approved."}
+{"id": "MSG_INFRA_003", "channel": "#devops-infra", "timestamp": "2026-02-05T10:20:00Z", "author": "@davidk", "text": "Thanks Alice! Opening TICK-301 to begin EKS cluster provisioning via Terraform."}
+{"id": "MSG_INFRA_004", "channel": "#devops-infra", "timestamp": "2026-02-11T14:00:00Z", "author": "@elena", "text": "Security review note: noticed static Redis passwords in pod specs. We need to migrate to IRSA."}
+{"id": "MSG_INFRA_005", "channel": "#devops-infra", "timestamp": "2026-02-12T11:00:00Z", "author": "Elena Rostova", "text": "Published policy DOC_DB_SECURITY_AUDIT: mandatory IAM IRSA authentication for all DB clients."}
+{"id": "MSG_INFRA_006", "channel": "#devops-infra", "timestamp": "2026-02-12T11:30:00Z", "author": "dkim", "text": "Will comply Elena. Created TICK-302 to update pod service accounts."}
+{"id": "MSG_INFRA_007", "channel": "#devops-infra", "timestamp": "2026-02-20T16:00:00Z", "author": "David Kim", "text": "Terraform apply for Frankfurt EKS cluster completed. Node groups healthy across 3 availability zones."}
+{"id": "MSG_INFRA_008", "channel": "#devops-infra", "timestamp": "2026-02-22T09:45:00Z", "author": "@alice", "text": "Has Istio service mesh mTLS been verified between ingress gateway and auth microservices?"}
+{"id": "MSG_INFRA_009", "channel": "#devops-infra", "timestamp": "2026-02-22T10:00:00Z", "author": "dkim", "text": "Yes, PeerAuthentication mode set to STRICT. Mutual TLS enforced."}
+{"id": "MSG_INFRA_010", "channel": "#devops-infra", "timestamp": "2026-02-28T17:00:00Z", "author": "David Kim", "text": "TICK-301 resolved: secondary EKS cluster in eu-central-1 is operational and receiving replica traffic."}
+{"id": "MSG_INFRA_011", "channel": "#devops-infra", "timestamp": "2026-03-02T14:00:00Z", "author": "@elena", "text": "Verified TICK-302 IRSA migration in staging and prod. No static DB passwords remain."}
+{"id": "MSG_INFRA_012", "channel": "#devops-infra", "timestamp": "2026-03-10T11:00:00Z", "author": "david", "text": "Conducting monthly DNS failover drill using Route53 health checks."}
+{"id": "MSG_INFRA_013", "channel": "#devops-infra", "timestamp": "2026-03-10T11:35:00Z", "author": "dkim", "text": "Failover drill completed in 2 minutes 14 seconds. Well within our 5-minute RTO target."}
+{"id": "MSG_INFRA_014", "channel": "#devops-infra", "timestamp": "2026-03-19T15:00:00Z", "author": "Aarav Mehta", "text": "Load testing team is running synthetic stress tests against Frankfurt gateway. Zero dropped packets."}
+{"id": "MSG_INFRA_015", "channel": "#devops-infra", "timestamp": "2026-03-19T15:10:00Z", "author": "@davidk", "text": "Awesome Aarav, Kubernetes multi-region migration is officially rock solid."}

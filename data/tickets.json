@@ -31,5 +31,127 @@
     "created_at": "2026-02-18T09:15:00Z",
     "description": "Elena verified that only IAM-authenticated pods in Kubernetes can connect to production data stores.",
     "topics": ["Security", "Kubernetes", "Database"]
+  },
+  {
+    "id": "TICK-104",
+    "title": "Enforce PKCE S256 Challenge Validation in Keycloak Gateway",
+    "project_id": "PRJ_OAUTH_UPGRADE",
+    "author_id": "P_ALICE",
+    "assignee_id": "P_ALICE",
+    "status": "resolved",
+    "created_at": "2026-02-20T11:00:00Z",
+    "description": "Reject plain code challenges in auth requests as per DOC_OAUTH_PKCE_SPEC.",
+    "topics": ["OAuth", "Security"]
+  },
+  {
+    "id": "TICK-105",
+    "title": "Automate RS256 JWT key rotation every 90 days",
+    "project_id": "PRJ_OAUTH_UPGRADE",
+    "author_id": "P_ALICE",
+    "assignee_id": "P_ELENA",
+    "status": "in_progress",
+    "created_at": "2026-02-25T15:20:00Z",
+    "description": "Build scheduled rotation job in Kubernetes to issue new RS256 keypairs and publish JWKS endpoints.",
+    "topics": ["OAuth", "Security"]
+  },
+  {
+    "id": "TICK-106",
+    "title": "Configure OpenTelemetry JSON log formatter across microservices",
+    "project_id": "PRJ_OAUTH_UPGRADE",
+    "author_id": "P_BOB",
+    "assignee_id": "P_BOB",
+    "status": "resolved",
+    "created_at": "2026-03-05T14:00:00Z",
+    "description": "Inject trace_id and span_id into log records adhering to DOC_TELEMETRY_STANDARD.",
+    "topics": ["Architecture", "Telemetry"]
+  },
+  {
+    "id": "TICK-201",
+    "title": "Implement Paynova webhook signature verification",
+    "project_id": "PRJ_BILLING_STRIPE",
+    "author_id": "P_ROHAN",
+    "assignee_id": "P_ROHAN",
+    "status": "in_progress",
+    "created_at": "2026-03-06T10:30:00Z",
+    "description": "Validate incoming Paynova HMAC-SHA256 signatures for EU recurring subscription renewals.",
+    "topics": ["Paynova", "Billing"]
+  },
+  {
+    "id": "TICK-202",
+    "title": "European Recurring Billing General Availability",
+    "project_id": "PRJ_BILLING_STRIPE",
+    "author_id": "P_PRIYA",
+    "assignee_id": "P_NEHA",
+    "status": "blocked",
+    "blocked_by": "TICK-201",
+    "created_at": "2026-03-10T09:00:00Z",
+    "description": "Launch EU subscription billing. Blocked by Paynova webhook reliability and signature verification in TICK-201.",
+    "topics": ["Paynova", "Billing"]
+  },
+  {
+    "id": "TICK-203",
+    "title": "SEPA Direct Debit mandate capture integration",
+    "project_id": "PRJ_BILLING_STRIPE",
+    "author_id": "P_KARAN",
+    "assignee_id": "P_KARAN",
+    "status": "open",
+    "created_at": "2026-03-15T11:15:00Z",
+    "description": "Integrate Paynova SEPA Direct Debit flow for German and French enterprise accounts.",
+    "topics": ["Paynova", "Billing"]
+  },
+  {
+    "id": "TICK-301",
+    "title": "Deploy secondary EKS cluster in eu-central-1",
+    "project_id": "PRJ_K8S_MIGRATION",
+    "author_id": "P_DAVID",
+    "assignee_id": "P_DAVID",
+    "status": "resolved",
+    "created_at": "2026-02-28T16:00:00Z",
+    "description": "Provision Frankfurt EKS cluster and configure ArgoCD sync per DOC_K8S_SPEC.",
+    "topics": ["Kubernetes", "DevOps"]
+  },
+  {
+    "id": "TICK-302",
+    "title": "Migrate production Redis connection to IRSA IAM roles",
+    "project_id": "PRJ_K8S_MIGRATION",
+    "author_id": "P_ELENA",
+    "assignee_id": "P_DAVID",
+    "status": "resolved",
+    "created_at": "2026-03-02T13:45:00Z",
+    "description": "Eliminate static password secrets and enforce IAM authentication per DOC_DB_SECURITY_AUDIT.",
+    "topics": ["Security", "Database"]
+  },
+  {
+    "id": "TICK-401",
+    "title": "Implement Tailwind CSS V4 design tokens for Customer Portal",
+    "project_id": "PRJ_PORTAL_REDESIGN",
+    "author_id": "P_FRANK",
+    "assignee_id": "P_FRANK",
+    "status": "in_progress",
+    "created_at": "2026-03-18T10:00:00Z",
+    "description": "Apply Northwind dark-mode theme variables to customer portal navbar and settings.",
+    "topics": ["Frontend", "Design"]
+  },
+  {
+    "id": "TICK-402",
+    "title": "Build PDF invoice download component in React",
+    "project_id": "PRJ_PORTAL_REDESIGN",
+    "author_id": "P_CAROL",
+    "assignee_id": "P_FRANK",
+    "status": "in_review",
+    "created_at": "2026-03-22T14:00:00Z",
+    "description": "Deliver invoice receipt download feature specified in DOC_PORTAL_PRD.",
+    "topics": ["Frontend", "Product"]
+  },
+  {
+    "id": "TICK-403",
+    "title": "Complete ownership transition and QA signoff for portal launch",
+    "project_id": "PRJ_PORTAL_REDESIGN",
+    "author_id": "P_FRANK",
+    "assignee_id": "P_AARAV",
+    "status": "open",
+    "created_at": "2026-03-25T11:00:00Z",
+    "description": "Frank Wright and Aarav Mehta conduct final end-to-end regression testing following ownership handoff.",
+    "topics": ["Frontend", "QA"]
   }
 ]

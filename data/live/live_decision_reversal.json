@@ -1,0 +1,13 @@
+{
+  "new_decision_id": "DEC_PAYMENTS_2026_05_REVERSAL",
+  "topic": "Paynova",
+  "text": "Terminate Paynova integration following INC-409 outage; standardize all European and US recurring subscriptions on Stripe Billing V2.",
+  "decided_by": "P_PRIYA",
+  "timestamp": "2026-05-30T10:00:00Z",
+  "source": {
+    "source_id": "SRC_LIVE_REVERSAL_PAYNOVA_01",
+    "file_path": "data/live/live_decision_reversal.json",
+    "chunk_offset": 0,
+    "snippet": "Decision by Priya Sharma on 2026-05-30: In light of INC-409 settlement failures, Northwind Labs reverses the March 1 decision and replaces Paynova with Stripe Billing V2 for all European recurring billing."
+  }
+}

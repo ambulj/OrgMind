@@ -65,3 +65,55 @@ PS C:\Users\sauja\Downloads\New folder> python scripts/smoke_test.py
  [OrgMind Smoke Test] ALL CHECKS PASSED (EXIT 0)   
 ==================================================
 ```
+
+---
+
+## 📦 Phase 1 Verification: Expanded Planted Story Data (Hour 16.5)
+
+```text
+PS C:\Users\sauja\Downloads\New folder> python scripts/check_data.py
+==================================================
+ [OrgMind Data Check] Validating Expanded Dataset 
+==================================================
+[PASS] Checked 11 people in people.csv
+[PASS] Checked 4 teams, 4 projects.
+[PASS] Checked 9 ownership records.
+[PASS] Checked 14 tickets in tickets.json
+[PASS] Checked 11 markdown documents (10 decisions with valid sources).
+[PASS] Checked 80 messages across 4 channels (all authors resolved!).
+[PASS] Verified 3 live drop payloads present in /data/live/.
+
+---------------- Data Summary ----------------
+ Employees (Person):        11
+ Teams:                     4
+ Projects:                  4
+ Tickets:                   14
+ Markdown Documents:        11
+ Extracted Decisions:       10
+ Total Chat Messages:       80
+ Live Update Drop Files:    3
+----------------------------------------------
+[OrgMind Data Check] ALL DATA CHECKS PASSED (EXIT 0)
+
+PS C:\Users\sauja\Downloads\New folder> python scripts/smoke_test.py
+==================================================
+ [OrgMind Smoke Test] Starting System Verification 
+==================================================
+[PASS] FalkorDB connection verified.
+[INFO] Current graph status: 163 nodes, 253 edges.
+[PASS] Node & edge presence confirmed.
+--- Verifying 5 Core Cypher Queries ---
+[PASS] Query 1: Who Owns executed (3 sample records returned).
+[PASS] Query 2: Who Knows About executed (3 sample records returned).
+[PASS] Query 3: Decision Trace executed (3 sample records returned).
+[PASS] Query 4: Supersedes Linkage executed (3 sample records returned).
+[PASS] Query 5: What Changed executed (3 sample records returned).
+--- Verifying Agent Tools Execution ---
+[PASS] Tool who_owns('OAuth') verified -> Alice Chen
+[PASS] Tool who_knows_about('Paynova') verified -> Top expert: Rohan Iyer
+[PASS] Tool trace_decision('OAuth') verified -> Decision: DEC_AUTH_2026_02
+==================================================
+ [OrgMind Smoke Test] ALL CHECKS PASSED (EXIT 0)   
+==================================================
+```
+

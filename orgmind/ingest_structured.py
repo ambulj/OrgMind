@@ -144,9 +144,48 @@ def ingest_tickets(json_path: str = "data/tickets.json") -> int:
             """
             graph.query(topic_query, {"tick_id": tick["id"], "topic": topic})
 
+        # Link BLOCKED_BY if present
+        if "blocked_by" in tick and tick["blocked_by"]:
+            blocked_query = """
+            MATCH (tk:Ticket {id: $tick_id})
+            MATCH (blocker:Ticket {id: $blocker_id})
+            MERGE (tk)-[:BLOCKED_BY]->(blocker)
+            """
+            graph.query(blocked_query, {"tick_id": tick["id"], "blocker_id": tick["blocked_by"]})
+
         count += 1
 
     print(f"[Ingest] Loaded {count} Ticket nodes.")
+    return count
+
+
+def ingest_ownership_history(csv_path: str = "data/ownership_history.csv") -> int:
+    """Loads ownership_history.csv to record valid_from, valid_to, and provenance."""
+    graph = get_graph()
+    if not os.path.exists(csv_path):
+        return 0
+
+    count = 0
+    with open(csv_path, mode="r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            query = """
+            MATCH (pr:Project {id: $project_id})
+            MATCH (owner {id: $owner_id})
+            MERGE (owner)-[r:OWNS {valid_from: $valid_from}]->(pr)
+            SET r.valid_to = $valid_to,
+                r.source = $source_doc_id
+            """
+            graph.query(query, {
+                "project_id": row["project_id"].strip(),
+                "owner_id": row["owner_id"].strip(),
+                "valid_from": row["valid_from"].strip(),
+                "valid_to": row["valid_to"].strip() if row.get("valid_to") else "",
+                "source_doc_id": row.get("source_doc_id", "").strip(),
+            })
+            count += 1
+
+    print(f"[Ingest] Loaded {count} Ownership History records.")
     return count
 
 
@@ -158,6 +197,7 @@ def run_all_structured_ingestion() -> None:
     ingest_teams()
     ingest_projects()
     ingest_tickets()
+    ingest_ownership_history()
     print("=== Structured Ingestion Completed Successfully ===")
 
 

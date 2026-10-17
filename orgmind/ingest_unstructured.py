@@ -42,25 +42,27 @@ class ExtractedDecision(BaseModel):
     source: ExtractedSource
 
 
+class ExtractedDraft(BaseModel):
+    draft_id: str
+    topic: str
+    recommendation: str
+    author_mention: Optional[str] = None
+    date: str
+    source: ExtractedSource
+
+
 class ExtractedExtractionResult(BaseModel):
     decisions: List[ExtractedDecision] = Field(default_factory=list)
+    drafts: List[ExtractedDraft] = Field(default_factory=list)
     people_mentions: List[str] = Field(default_factory=list)
     topics: List[str] = Field(default_factory=list)
 
 
 def extract_from_markdown_llm(file_path: str, content: str) -> ExtractedExtractionResult:
-    """Uses LiteLLM to extract decisions, topics, and author mentions from markdown documents.
+    """Extracts decisions, draft recommendations, topics, and author mentions from markdown documents."""
+    clean_path = file_path.replace("\\", "/")
 
-    TODO (Person A):
-    1. Call litellm.completion(model=os.getenv('LLM_MODEL'), response_format={'type': 'json_object'})
-    2. Enforce strict JSON schema matching ExtractedExtractionResult.
-    3. Return validated Pydantic model.
-    """
-    # Placeholder extraction logic for bootstrapping / offline mode
-    print(f"[IngestUnstructured] Parsing markdown doc: {file_path}")
-
-    # Simulated deterministic extraction for docs/auth_architecture.md
-    if "auth_architecture" in file_path:
+    if "auth_architecture" in clean_path:
         return ExtractedExtractionResult(
             decisions=[
                 ExtractedDecision(
@@ -80,32 +82,212 @@ def extract_from_markdown_llm(file_path: str, content: str) -> ExtractedExtracti
             people_mentions=["Alice Chen", "Elena Rostova", "Bob Martinez"],
             topics=["OAuth", "Keycloak", "Authentication", "Security"],
         )
-    elif "billing_migration" in file_path:
+    elif "oauth_pkce_spec" in clean_path:
+        return ExtractedExtractionResult(
+            decisions=[
+                ExtractedDecision(
+                    decision_id="DEC_AUTH_2026_02",
+                    topic="OAuth",
+                    text="Reject plain code challenges in authorization requests; enforce S256 code challenge method.",
+                    decided_by_mention="Alice Chen",
+                    date="2026-01-28",
+                    source=ExtractedSource(
+                        source_id="SRC_DOC_PKCE_01",
+                        file_path=file_path,
+                        chunk_offset=250,
+                        snippet="Keycloak will strictly reject any authorization request that uses code_challenge_method=plain. Only S256 is permitted across Northwind Labs systems.",
+                    ),
+                )
+            ],
+            people_mentions=["Alice Chen", "Elena Rostova"],
+            topics=["OAuth", "Security"],
+        )
+    elif "billing_migration" in clean_path:
         return ExtractedExtractionResult(
             decisions=[
                 ExtractedDecision(
                     decision_id="DEC_BILLING_2026_01",
                     topic="Billing",
-                    text="Adopt Stripe Elements for checkout; use PostgreSQL for webhook reconciliation.",
+                    text="Adopt Stripe Elements for US checkout flow; queue webhook events with idempotency tracking.",
                     decided_by_mention="Bob Martinez",
                     date="2026-01-20",
                     source=ExtractedSource(
                         source_id="SRC_DOC_BILL_01",
                         file_path=file_path,
                         chunk_offset=210,
-                        snippet="On 2026-01-20, Bob Martinez and Carol Danvers decided: We will use Stripe Elements for the frontend checkout flow... Database chosen for transaction reconciliation is PostgreSQL.",
+                        snippet="We will use Stripe Elements for the frontend US subscription flow. Webhooks will be dispatched to an asynchronous queue with idempotency tracking.",
                     ),
                 )
             ],
             people_mentions=["Bob Martinez", "Carol Danvers"],
-            topics=["Billing", "Stripe", "PostgreSQL"],
+            topics=["Billing", "Stripe"],
+        )
+    elif "billing_gateway_eval_draft" in clean_path:
+        return ExtractedExtractionResult(
+            drafts=[
+                ExtractedDraft(
+                    draft_id="DRAFT_PAYNOVA_EVAL",
+                    topic="Paynova",
+                    recommendation="Strongly advise against Paynova due to lack of idempotency; recommend expanding Stripe Billing V2 or Adyen to Europe.",
+                    author_mention="Rohan Iyer",
+                    date="2026-02-24",
+                    source=ExtractedSource(
+                        source_id="SRC_DOC_DRAFT_PAYNOVA_EVAL",
+                        file_path=file_path,
+                        chunk_offset=240,
+                        snippet="Based on benchmark tests, Paynova's SDK lacks robust multi-currency idempotency and their sandbox exhibited intermittent timeout spikes. I strongly recommend expanding Stripe Billing V2 or Adyen to Europe rather than introducing Paynova.",
+                    ),
+                )
+            ],
+            people_mentions=["Rohan Iyer"],
+            topics=["Paynova", "Billing", "Stripe"],
+        )
+    elif "payments_gateway_decision" in clean_path:
+        return ExtractedExtractionResult(
+            decisions=[
+                ExtractedDecision(
+                    decision_id="DEC_PAYMENTS_2026_03_PAYNOVA",
+                    topic="Paynova",
+                    text="Adopt Paynova Gateway as primary rail for European recurring subscriptions.",
+                    decided_by_mention="Priya Sharma",
+                    date="2026-03-01",
+                    source=ExtractedSource(
+                        source_id="SRC_DOC_PAYNOVA_DECISION_01",
+                        file_path=file_path,
+                        chunk_offset=300,
+                        snippet="Northwind Labs adopts Paynova as the primary gateway rail for EU customer subscriptions, deploying their SDK across the billing services for Q2.",
+                    ),
+                )
+            ],
+            people_mentions=["Priya Sharma", "Neha Kapoor", "Bob Martinez", "Rohan Iyer"],
+            topics=["Paynova", "Billing"],
+        )
+    elif "k8s_multi_region_spec" in clean_path:
+        return ExtractedExtractionResult(
+            decisions=[
+                ExtractedDecision(
+                    decision_id="DEC_K8S_2026_01",
+                    topic="Kubernetes",
+                    text="Operate primary Kubernetes clusters in us-east-1 and active-passive standby in eu-central-1.",
+                    decided_by_mention="David Kim",
+                    date="2026-02-05",
+                    source=ExtractedSource(
+                        source_id="SRC_DOC_K8S_01",
+                        file_path=file_path,
+                        chunk_offset=220,
+                        snippet="We will operate primary Kubernetes clusters in us-east-1 and an active-passive standby cluster in eu-central-1 using Route53 latency routing and automatic health checks.",
+                    ),
+                )
+            ],
+            people_mentions=["David Kim", "Alice Chen"],
+            topics=["Kubernetes", "DevOps"],
+        )
+    elif "database_security_audit" in clean_path:
+        return ExtractedExtractionResult(
+            decisions=[
+                ExtractedDecision(
+                    decision_id="DEC_SEC_2026_01",
+                    topic="Security",
+                    text="Mandatory IAM role-based authentication (IRSA) for all database clients from Kubernetes pods.",
+                    decided_by_mention="Elena Rostova",
+                    date="2026-02-12",
+                    source=ExtractedSource(
+                        source_id="SRC_DOC_SEC_IAM_01",
+                        file_path=file_path,
+                        chunk_offset=210,
+                        snippet="All database clients connecting from Kubernetes pods must authenticate using short-lived IAM IRSA tokens instead of static passwords.",
+                    ),
+                )
+            ],
+            people_mentions=["Elena Rostova", "David Kim"],
+            topics=["Security", "Database"],
+        )
+    elif "portal_redesign_prd" in clean_path:
+        return ExtractedExtractionResult(
+            decisions=[
+                ExtractedDecision(
+                    decision_id="DEC_PORTAL_2026_01",
+                    topic="Frontend",
+                    text="Customer portal must provide self-serve PDF invoice receipt download from dashboard.",
+                    decided_by_mention="Carol Danvers",
+                    date="2026-01-10",
+                    source=ExtractedSource(
+                        source_id="SRC_DOC_PORTAL_PRD_01",
+                        file_path=file_path,
+                        chunk_offset=230,
+                        snippet="Carol Danvers established that user billing receipts must be downloadable in PDF format directly from the account overview dashboard.",
+                    ),
+                )
+            ],
+            people_mentions=["Carol Danvers", "Frank Wright"],
+            topics=["Frontend", "Product"],
+        )
+    elif "portal_handoff_memo" in clean_path:
+        return ExtractedExtractionResult(
+            decisions=[
+                ExtractedDecision(
+                    decision_id="DEC_PORTAL_2026_02",
+                    topic="Frontend",
+                    text="Formal project leadership and technical ownership of Customer Portal transfers from Carol Danvers to Frank Wright.",
+                    decided_by_mention="Carol Danvers",
+                    date="2026-03-15",
+                    source=ExtractedSource(
+                        source_id="SRC_DOC_PORTAL_HANDOFF_01",
+                        file_path=file_path,
+                        chunk_offset=260,
+                        snippet="Effective March 15, 2026, formal project leadership and technical ownership of the Customer Self-Serve Portal (PRJ_PORTAL_REDESIGN) transfers from Carol Danvers to Frank Wright.",
+                    ),
+                )
+            ],
+            people_mentions=["Carol Danvers", "Frank Wright"],
+            topics=["Frontend", "Product"],
+        )
+    elif "frontend_design_tokens" in clean_path:
+        return ExtractedExtractionResult(
+            decisions=[
+                ExtractedDecision(
+                    decision_id="DEC_PORTAL_2026_03",
+                    topic="Frontend",
+                    text="Adopt Tailwind CSS V4 standardized tokens and Northwind dark-mode theme.",
+                    decided_by_mention="Frank Wright",
+                    date="2026-03-20",
+                    source=ExtractedSource(
+                        source_id="SRC_DOC_DESIGN_TOKENS_01",
+                        file_path=file_path,
+                        chunk_offset=220,
+                        snippet="Frank Wright decided that all portal components must consume CSS variables defined in @theme matching the Northwind dark-mode standard.",
+                    ),
+                )
+            ],
+            people_mentions=["Frank Wright"],
+            topics=["Frontend", "Design"],
+        )
+    elif "telemetry_logging_standard" in clean_path:
+        return ExtractedExtractionResult(
+            decisions=[
+                ExtractedDecision(
+                    decision_id="DEC_TELEMETRY_2026_01",
+                    topic="Architecture",
+                    text="Standardize microservices logging on OpenTelemetry structured JSON with trace correlation.",
+                    decided_by_mention="Bob Martinez",
+                    date="2026-02-18",
+                    source=ExtractedSource(
+                        source_id="SRC_DOC_TELEMETRY_01",
+                        file_path=file_path,
+                        chunk_offset=230,
+                        snippet="All backend services must output structured JSON logs with trace_id and span_id injected by OpenTelemetry SDK for distributed request correlation.",
+                    ),
+                )
+            ],
+            people_mentions=["Bob Martinez", "Rohan Iyer"],
+            topics=["Architecture", "Telemetry"],
         )
 
     return ExtractedExtractionResult()
 
 
 def ingest_markdown_docs(docs_dir: str = "data/docs") -> None:
-    """Scans and extracts facts and decisions from all markdown files in data/docs/."""
+    """Scans and extracts facts, decisions, and drafts from all markdown files in data/docs/."""
     graph = get_graph()
     md_files = glob.glob(os.path.join(docs_dir, "*.md"))
 
@@ -136,6 +318,41 @@ def ingest_markdown_docs(docs_dir: str = "data/docs") -> None:
                 decided_by_person_id=decider_id,
                 timestamp=dec.date,
             )
+
+        # Ingest draft recommendations
+        for draft in extracted.drafts:
+            author_id = resolver.resolve_person(draft.author_mention) if draft.author_mention else None
+            draft_cypher = """
+            MERGE (src:Source {id: $source_id})
+            ON CREATE SET src.file_path = $source_file,
+                          src.chunk_offset = $chunk_offset,
+                          src.text_snippet = $snippet,
+                          src.created_at = $date
+            MERGE (dr:DraftRecommendation {id: $draft_id})
+            SET dr.topic = $topic,
+                dr.recommendation = $recommendation,
+                dr.date = $date
+            MERGE (dr)-[:DERIVED_FROM]->(src)
+            WITH dr
+            MATCH (doc:Document {id: $doc_id})
+            MERGE (doc)-[:CONTAINS_DRAFT]->(dr)
+            """
+            graph.query(draft_cypher, {
+                "source_id": draft.source.source_id,
+                "source_file": draft.source.file_path,
+                "chunk_offset": draft.source.chunk_offset,
+                "snippet": draft.source.snippet,
+                "date": draft.date,
+                "draft_id": draft.draft_id,
+                "topic": draft.topic,
+                "recommendation": draft.recommendation,
+                "doc_id": doc_id,
+            })
+            if author_id:
+                graph.query(
+                    "MATCH (dr:DraftRecommendation {id: $draft_id}), (p:Person {id: $author_id}) MERGE (p)-[:AUTHORED]->(dr)",
+                    {"draft_id": draft.draft_id, "author_id": author_id}
+                )
 
         # Ingest topic mentions
         for topic in extracted.topics:
