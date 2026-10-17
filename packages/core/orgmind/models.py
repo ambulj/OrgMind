@@ -121,6 +121,13 @@ def get_session_factory():
 
 
 def init_app_db():
-    """Creates all relational database tables if they do not exist."""
+    """Creates all relational database tables if they do not exist, ensuring a default workspace."""
     engine = get_engine()
     Base.metadata.create_all(bind=engine)
+    session_factory = sessionmaker(bind=engine)
+    with session_factory() as session:
+        default_ws = session.query(Workspace).filter_by(slug="default").first()
+        if not default_ws:
+            default_ws = Workspace(id="default", slug="default", name="Default Workspace")
+            session.add(default_ws)
+            session.commit()

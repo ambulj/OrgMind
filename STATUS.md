@@ -609,4 +609,40 @@ PS C:\Users\sauja\Downloads\New folder> python scripts/preflight.py
 - **Mypy Type Checking**: **Success: no issues found in 12 source files**
 - **Smoke Test**: **ALL CHECKS PASSED (EXIT 0)**
 
+---
+
+## 🏛️ Phase 3: Domain Model Upgrade (Bitemporality, Permissions & Redaction)
+
+**Completion Date**: 2026-10-17 16:30 UTC  
+**Capabilities Delivered**:
+
+1. **Bitemporal Field Tracking**:
+   - `Decision`: Added `valid_from` & `valid_to` (real world timeline) and `recorded_at` (system audit timeline).
+   - `OWNS` relationships: Added `valid_from`, `valid_to`, and `status` ('current' vs 'previous') enabling full ownership tenure queryability.
+   - `Source`: Added `content_hash` (SHA-256), `uri`, `origin_type`, `visibility` (JSON ACL list), `redacted` (boolean tombstone flag).
+2. **Extraction & Confidence Calibration**:
+   - `Decision` nodes track numerical `confidence` (0.0 to 1.0) mapped to UI tiers (`High`, `Medium`, `Low`), `extracted_by` (model name), `extraction_run_id`, and `review_status` (`auto`, `pending`, `approved`, `rejected`).
+3. **Entity Resolution & Human-in-the-Loop Merging**:
+   - Added `suggest_merge_candidates(raw_mention, top_k)` to `EntityResolver`.
+   - **Strict Rule Enforced**: Never merge silently. Ambiguous or misspelled handles (e.g. `'alce'`) yield ranked candidates with `review_action: "requires_human_approval"`.
+4. **Bitemporal "As-Of" Time Travel**:
+   - Every analytical read tool (`who_owns`, `who_knows_about`, `trace_decision`, `what_changed_since`, `compare_draft_vs_decision`) accepts an optional `as_of` timestamp.
+   - Accurately resolves historical state (e.g., `who_owns('Customer Self-Serve Portal', as_of='2026-02-01')` returns Carol Danvers, whereas `as_of='2026-04-01'` returns Frank Wright).
+5. **In-Query Cypher Permission Filtering**:
+   - Access control applied directly inside OpenCypher `WHERE` clauses (`s.redacted = false AND (s.visibility CONTAINS 'all' OR s.visibility CONTAINS $caller_role)`).
+   - Proved via automated test that a `Viewer` cannot retrieve or cite restricted sources (`["Admin", "Auditor"]`), while `Admin` can.
+6. **Redaction Tombstones & Audit Trail**:
+   - `redact_source(source_id, reason, actor)` blanks verbatim text with a tombstone (`[REDACTED: reason]`), sets `redacted = true`, preserves cryptographic `content_hash` and graph topology, and logs an immutable audit event in the relational `audit_logs` table.
+7. **Migration & Rollback Blueprint**:
+   - Schema upgrade script `scripts/migrate_v02_domain.py` verified idempotent against `northwind_labs`.
+   - Comprehensive rollback plan documented in `docs/MIGRATIONS.md`.
+
+### Acceptance Criteria Verification
+
+- **Automated Tests**: **25 / 25 PASSED (100% in 5.63s)**
+- **Ruff Linter**: **All checks passed!**
+- **Mypy Type Checking**: **Success: no issues found in 12 source files**
+- **Smoke Test**: **ALL CHECKS PASSED (EXIT 0)**
+- **Legacy Streamlit App**: **HTTP 200 OK**
+
 

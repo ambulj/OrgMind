@@ -161,6 +161,33 @@ class EntityResolver:
         """Returns the list of author handles/mentions flagged for review."""
         return list(self.flagged_unknowns)
 
+    def suggest_merge_candidates(self, raw_mention: str, top_k: int = 3) -> list[dict[str, Any]]:
+        """Identifies candidate canonical identities for an ambiguous or unrecognized mention.
+        Rule: NEVER merge silently. Presents candidates for human-in-the-loop review.
+        """
+        clean = str(raw_mention).strip().lower().lstrip("@")
+        candidates = list(self.alias_to_id.keys())
+        matches = difflib.get_close_matches(clean, candidates, n=top_k, cutoff=0.5)
+
+        results = []
+        seen_pids = set()
+        for m in matches:
+            pid = self.alias_to_id[m]
+            if pid in seen_pids:
+                continue
+            seen_pids.add(pid)
+            ratio = round(difflib.SequenceMatcher(None, clean, m).ratio(), 2)
+            person = self.id_to_person.get(pid, {})
+            results.append({
+                "raw_mention": raw_mention,
+                "matched_alias": m,
+                "suggested_id": pid,
+                "suggested_name": person.get("name", "Unknown"),
+                "similarity_score": ratio,
+                "review_action": "requires_human_approval",
+            })
+        return results
+
     def get_person_details(self, person_id: str) -> dict[str, str] | None:
         """Retrieves canonical metadata for a person."""
         return self.id_to_person.get(person_id)
