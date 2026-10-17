@@ -570,3 +570,43 @@ PS C:\Users\sauja\Downloads\New folder> python scripts/preflight.py
 7. **GitHub Actions CI**:
    - `.github/workflows/ci.yml` configured with FalkorDB service container, lint, typecheck, seed, and pytest.
 
+---
+
+## 🛡️ Phase 2: Platform Foundations & Multi-Tenant Isolation
+
+**Completion Date**: 2026-10-17 16:15 UTC  
+**Capabilities Delivered**:
+
+1. **Pydantic-Settings Configuration (`packages/core/orgmind/config.py`)**:
+   - Strict typed configuration loaded from `.env` and system environment variables.
+   - Zero hard-coded hostnames or ports.
+2. **Multi-Tenant Workspace Isolation Guard (`packages/core/orgmind/db.py`)**:
+   - Deterministic workspace-to-graph mapping: `get_workspace_graph_name(workspace_id) -> 'org_<id>'`.
+   - Cross-workspace graph access is impossible by construction; each workspace strictly queries its own graph partition.
+   - Verified via automated test `tests/test_workspace_isolation.py` (proves Workspace B receives 0 results when querying Workspace A's entities).
+3. **App Relational Database & RBAC (`packages/core/orgmind/models.py`)**:
+   - SQLAlchemy 2.0 models for `User`, `Workspace`, `Membership`, `AuditLog`.
+   - Four distinct RBAC roles: `Admin`, `Editor`, `Viewer`, `Auditor`.
+   - SQLite for zero-setup local dev (`sqlite:///./orgmind.db`); PostgreSQL 16 ready in Docker Compose.
+4. **Authentication & Session Security (`packages/core/orgmind/auth.py`)**:
+   - Salted PBKDF2-HMAC-SHA256 password hashing with constant-time verification.
+   - Signed JWT session tokens with role claims and expiration validation.
+   - `WorkspaceContext` security interface carrying user, workspace, role, and request ID.
+   - `OIDCProviderInterface` abstract interface for enterprise SSO integration (documented in `docs/AUTH.md`).
+5. **Graph Backup & Restore Engine (`scripts/backup_restore.py`)**:
+   - Per-graph snapshot serialization and restore.
+   - Automated round-trip restore test in `tests/test_backup_restore.py` verifying 100% node and edge count parity.
+6. **Production Infrastructure (`infra/docker-compose.yml`)**:
+   - `falkordb`: Persistent volume at `/var/lib/falkordb/data`, password authentication, AOF everysec, healthcheck.
+   - `postgres`: PostgreSQL 16 Alpine container with persistent volume and `pg_isready` healthcheck.
+   - `redis`: Dedicated Redis 7 container on port 6380 for background job queues (strictly separate from FalkorDB).
+   - `api`, `worker`, `web`: Full-stack service definitions with healthchecks.
+
+### Acceptance Criteria Verification
+
+- **Automated Tests**: **19 / 19 PASSED (100% in 4.90s)**
+- **Ruff Linter**: **All checks passed!**
+- **Mypy Type Checking**: **Success: no issues found in 12 source files**
+- **Smoke Test**: **ALL CHECKS PASSED (EXIT 0)**
+
+

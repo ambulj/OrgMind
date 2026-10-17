@@ -16,3 +16,6 @@ build/
 app/graph_temp.html
 .pytest_cache/
 .streamlit/
+*.db
+*.sqlite3
+*.sqlite

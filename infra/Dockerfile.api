@@ -1,0 +1,24 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    gcc \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy monorepo configuration and packages
+COPY pyproject.toml /app/
+COPY packages/core /app/packages/core
+COPY apps/api /app/apps/api
+
+# Install dependencies in editable mode
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -e /app/packages/core && \
+    pip install --no-cache-dir fastapi uvicorn[standard] psycopg2-binary redis arq
+
+EXPOSE 8000
+
+CMD ["uvicorn", "apps.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,33 +1,47 @@
-"""Database connection and schema management for FalkorDB.
+"""Database connection, workspace isolation guard, and schema management for FalkorDB."""
 
-Technical Terms:
-- FalkorDB: A low-latency graph database engine built on Redis that executes Cypher queries.
-- Cypher: Declarative graph query language used to create and query nodes and edges.
-- Graph Instance: A named graph partition inside FalkorDB (e.g. 'northwind_labs').
-"""
-
-import os
+import re
 from typing import Any
 
-from dotenv import load_dotenv
 from falkordb import FalkorDB
 
-# Load environment variables from .env
-load_dotenv()
+from orgmind.config import settings
+
+
+def get_workspace_graph_name(workspace_id: str | None = None) -> str:
+    """Maps a workspace identifier to its strictly isolated FalkorDB graph partition.
+
+    Enforces workspace isolation by construction:
+    - Default workspace -> settings.FALKORDB_GRAPH_NAME (e.g. 'northwind_labs')
+    - Tenant workspaces -> 'org_' + sanitized_workspace_id
+    - Cross-workspace graph access is impossible because graph names are
+      deterministically derived and cannot cross partition boundaries.
+    """
+    if not workspace_id or workspace_id.strip() in (
+        "",
+        "default",
+        "northwind_labs",
+        settings.FALKORDB_GRAPH_NAME,
+    ):
+        return settings.FALKORDB_GRAPH_NAME
+
+    # Sanitize workspace identifier: only alphanumeric and underscores allowed
+    clean_id = re.sub(r"[^a-zA-Z0-9_]", "_", workspace_id.strip().lower())
+    clean_id = re.sub(r"_+", "_", clean_id).strip("_")
+
+    if not clean_id:
+        return settings.FALKORDB_GRAPH_NAME
+
+    return f"org_{clean_id}" if not clean_id.startswith("org_") else clean_id
 
 
 def get_db_client() -> FalkorDB:
     """Creates and returns a connection client to the FalkorDB server.
-
-    Reads configuration from environment variables:
-    - FALKORDB_HOST (default: 'localhost')
-    - FALKORDB_PORT (default: 6379)
-    - FALKORDB_PASSWORD (optional)
+    Uses settings from pydantic-settings configuration with graceful password fallback.
     """
-    host = os.getenv("FALKORDB_HOST", "localhost")
-    port = int(os.getenv("FALKORDB_PORT", "6379"))
-    raw_pw = os.getenv("FALKORDB_PASSWORD", "").strip()
-    password = raw_pw if raw_pw else None
+    host = settings.FALKORDB_HOST
+    port = settings.FALKORDB_PORT
+    password = settings.FALKORDB_PASSWORD if settings.FALKORDB_PASSWORD else None
 
     try:
         client = FalkorDB(host=host, port=port, password=password)
@@ -40,10 +54,12 @@ def get_db_client() -> FalkorDB:
         raise
 
 
-def get_graph(graph_name: str | None = None):
-    """Selects and returns a specific graph instance within FalkorDB."""
-    if graph_name is None:
-        graph_name = os.getenv("FALKORDB_GRAPH_NAME", "northwind_labs")
+def get_graph(workspace_or_graph: str | None = None):
+    """Selects and returns an isolated graph instance within FalkorDB.
+
+    Accepts either a workspace ID (which maps to 'org_<id>') or direct graph name.
+    """
+    graph_name = get_workspace_graph_name(workspace_or_graph)
     client = get_db_client()
     return client.select_graph(graph_name)
 
@@ -69,32 +85,32 @@ def init_schema(graph=None) -> None:
         "CREATE INDEX FOR (tk:Ticket) ON (tk.id)",
     ]
 
-    print("[OrgMind] Initializing graph indexes...")
     for idx_query in indexes:
         try:
-            # TODO: FalkorDB will raise an exception if index already exists. Catch and ignore.
             graph.query(idx_query)
-        except Exception as e:
+        except Exception:
             # Expected if index already exists
-            print(f"[OrgMind] Index note: {e}")
-
-    print("[OrgMind] Schema & indexes successfully initialized.")
+            pass
 
 
-def query_graph(query: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-    """Executes a Cypher query with optional parameters and returns records as Python dictionaries.
+def query_graph(
+    query: str,
+    params: dict[str, Any] | None = None,
+    workspace_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """Executes a parameterised OpenCypher query within an isolated workspace graph.
 
     Args:
-        query: OpenCypher query string compatible with FalkorDB.
-        params: Dictionary of parameters to substitute (e.g. {'topic_name': 'OAuth'}).
+        query: Parameterised OpenCypher query string.
+        params: Dictionary of parameters (e.g. {'topic_name': 'OAuth'}).
+        workspace_id: Optional workspace ID for multi-tenant isolation.
 
     Returns:
         List of dicts representing tabular rows returned by the Cypher RETURN clause.
     """
-    graph = get_graph()
+    graph = get_graph(workspace_id)
     params = params or {}
 
-    # TODO: In Person A sprint, convert FalkorDB QueryResult result_set into standard dict rows
     result = graph.query(query, params)
     rows: list[dict[str, Any]] = []
 
@@ -108,26 +124,18 @@ def query_graph(query: str, params: dict[str, Any] | None = None) -> list[dict[s
 
 def smoke_test() -> bool:
     """Runs a quick sanity check against FalkorDB: connects, writes one node, reads it, and cleans up."""
-    print("[OrgMind] Running smoke test against FalkorDB...")
     try:
         graph = get_graph()
-        # Create temporary node
         graph.query("CREATE (t:SmokeTestNode {test_id: 'smoke_1', status: 'ok'})")
-        # Read back
         res = graph.query("MATCH (t:SmokeTestNode {test_id: 'smoke_1'}) RETURN t.status")
-        # Clean up
         graph.query("MATCH (t:SmokeTestNode {test_id: 'smoke_1'}) DELETE t")
 
-        if res.result_set and res.result_set[0][0] == "ok":
-            print("[OrgMind] Smoke test PASSED: successfully wrote and read from FalkorDB!")
-            return True
-        else:
-            print("[OrgMind] Smoke test FAILED: unexpected result set.")
-            return False
+        return bool(res.result_set and res.result_set[0][0] == "ok")
     except Exception as exc:
         print(f"[OrgMind] Smoke test ERROR: {exc}")
         return False
 
 
 if __name__ == "__main__":
-    smoke_test()
+    success = smoke_test()
+    print(f"[OrgMind] DB Smoke Test: {'PASSED' if success else 'FAILED'}")

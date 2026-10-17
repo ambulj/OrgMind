@@ -55,7 +55,9 @@ ignore = [
     "B008",   # do not perform function calls in argument defaults (FastAPI Depends)
     "SIM108", # ternary operator replacement
     "SIM115", # context manager for open in quick scripts
+    "SIM105", # try-except-pass vs contextlib.suppress
     "B905",   # zip without explicit strict
+    "UP042",  # StrEnum vs (str, Enum) for SQLAlchemy compatibility
 ]
 
 [tool.mypy]
