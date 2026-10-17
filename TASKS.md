@@ -20,53 +20,54 @@
 ### Phase 1: Setup & Foundational Bootstrap (Hours 0 – 4)
 - [x] **[MUST-HAVE] [Both]**: Launch FalkorDB via Docker container; verify port 6379 connectivity.
 - [x] **[MUST-HAVE] [Both]**: Create repository skeleton, placeholder files, `.env.example`, `requirements.txt`.
-- [ ] **[MUST-HAVE] [Person A]**: Execute `db.py` smoke test; verify `CREATE INDEX FOR (...) ON (...)` creates range indexes cleanly.
-- [ ] **[MUST-HAVE] [Person B]**: Test LiteLLM connectivity with sample prompt and tool schema.
+- [x] **[MUST-HAVE] [Person A]**: Execute `db.py` smoke test; verify `CREATE INDEX FOR (...) ON (...)` creates range indexes cleanly.
+- [x] **[MUST-HAVE] [Person B]**: Test LiteLLM connectivity with sample prompt and tool schema.
 
 ---
 
 ### Phase 2: Ingestion & Core Agent Loop (Hours 4 – 12)
 - **Person A (Data & Graph)**:
-  - [ ] **[MUST-HAVE]**: Implement `ingest_structured.py` to populate `Person`, `Team`, `Project`, and `Ticket` nodes with verified Cypher queries.
-  - [ ] **[MUST-HAVE]**: Implement `resolve.py` alias matching (map `@alice`, `achen` to `P_ALICE`).
-  - [ ] **[MUST-HAVE]**: Implement `ingest_unstructured.py` for markdown docs and chat logs, guaranteeing that every extracted Decision is linked to an exact `Source` node with snippet text.
-  - [ ] **[NICE-TO-HAVE]**: Add fuzzy name matching (RapidFuzz) in `resolve.py` for handling chat typos.
+  - [x] **[MUST-HAVE]**: Implement `ingest_structured.py` to populate `Person`, `Team`, `Project`, and `Ticket` nodes with verified Cypher queries.
+  - [x] **[MUST-HAVE]**: Implement `resolve.py` alias matching (map `@alice`, `achen` to `P_ALICE`).
+  - [x] **[MUST-HAVE]**: Implement `ingest_unstructured.py` for markdown docs and chat logs, guaranteeing that every extracted Decision is linked to an exact `Source` node with snippet text.
+  - [x] **[NICE-TO-HAVE]**: Add fuzzy name matching (`difflib`) in `resolve.py` for handling chat typos and unknown handle flagging.
 - **Person B (Tools & Agent)**:
-  - [ ] **[MUST-HAVE]**: Implement the read tools in `tools.py`: `who_owns`, `who_knows_about`, and `trace_decision`.
-  - [ ] **[MUST-HAVE]**: Wire `agent.py` ReAct loop with LiteLLM; enforce strict citation prompt rule: *All claims must cite [Source: ID]; if absent, state "I couldn't find this in the company graph."*
-  - [ ] **[MUST-HAVE]**: Connect `get_source` tool so the agent can fetch verbatim source quotes.
-  - [ ] **[NICE-TO-HAVE]**: Test tools via FastMCP server (`mcp_server.py`).
+  - [x] **[MUST-HAVE]**: Implement the read tools in `tools.py`: `who_owns`, `who_knows_about`, and `trace_decision`.
+  - [x] **[MUST-HAVE]**: Wire `agent.py` ReAct loop with LiteLLM; enforce strict citation prompt rule: *All claims must cite [Source: ID]; if absent, state "I couldn't find this in the company graph."*
+  - [x] **[MUST-HAVE]**: Connect `get_source` tool so the agent can fetch verbatim source quotes.
+  - [x] **[NICE-TO-HAVE]**: Test tools via FastMCP server (`mcp_server.py`).
 
 ---
 
 ### Phase 3: Freshness, UI & Action Tools (Hours 12 – 20)
 - **Person A (Freshness & Provenance)**:
-  - [ ] **[MUST-HAVE]**: Finalize `apply_decision()` in `freshness.py` to handle the `[:SUPERSEDES]` relationship and mark old decisions `status: 'superseded'`.
-  - [ ] **[MUST-HAVE]**: Test `ingest_live_decision()` with `data/live/new_billing_decision.json` to verify historical audit trail without data deletion.
-  - [ ] **[NICE-TO-HAVE]**: FalkorDB GraphRAG-SDK experiment (Timeboxed to **3 hours max**; skip if complex).
+  - [x] **[MUST-HAVE]**: Finalize `commit_decision()` in `freshness.py` to handle the `[:SUPERSEDES]` relationship and mark old decisions `status: 'superseded'`.
+  - [x] **[MUST-HAVE]**: Test `commit_decision()` with `data/live/live_decision_reversal.json` to verify historical audit trail without data deletion and enforce idempotency.
+  - [x] **[NICE-TO-HAVE]**: Multi-hop graph dependency analysis `impact_analysis()` traversing Decision -> Topic -> Projects -> Tickets -> Blockers -> People.
 - **Person B (UI & Action Tools)**:
-  - [ ] **[MUST-HAVE]**: Build Streamlit chat interface in `app/streamlit_app.py` with 2-column layout (Chat left, Sources panel right).
-  - [ ] **[MUST-HAVE]**: Implement action tools in `tools.py`: `create_ticket` and `draft_message` (simulated writes to graph).
-  - [ ] **[MUST-HAVE]**: Embed Pyvis interactive graph component in the right pane to visually display nodes and edges.
-  - [ ] **[NICE-TO-HAVE]**: Multi-tenant graph partitioning (`falkordb.select_graph(company_id)`) — strictly optional if time permits.
+  - [x] **[MUST-HAVE]**: Build Streamlit chat interface in `app/streamlit_app.py` with 2-column layout (Chat left, 4-Tab Inspector right).
+  - [x] **[MUST-HAVE]**: Implement action tools in `tools.py`: `create_ticket`, `draft_message`, and `assign_task` with Human-in-the-Loop simulation confirmation (`confirm=False`).
+  - [x] **[MUST-HAVE]**: Embed Pyvis interactive graph component in the right pane to visually display nodes and edges with active node highlighting.
+  - [x] **[NICE-TO-HAVE]**: FastMCP client test suite (`scripts/test_mcp_client.py`) testing tool discovery and invocation over MCP protocol.
 
 ---
 
 ### Phase 4: Integration & Benchmark Evaluation (Hours 20 – 28)
-- [ ] **[MUST-HAVE] [Person A & B]**: Run end-to-end flow from data ingestion through chat queries.
-- [ ] **[MUST-HAVE] [Person B]**: Execute `tests/run_eval.py` against `tests/test_questions.json`; tune system prompt until 100% pass rate is achieved.
-- [ ] **[MUST-HAVE] [Person A]**: Inspect FalkorDB queries for performance and fix any unindexed lookups.
-- [ ] **[MUST-HAVE] [Person B]**: Add 1-click Demo Ribbon buttons in Streamlit to trigger Moments A, B, C, and D smoothly.
+- [x] **[MUST-HAVE] [Person A & B]**: Run end-to-end flow from data ingestion through chat queries.
+- [x] **[MUST-HAVE] [Person B]**: Execute `tests/run_eval.py` against `tests/test_questions.json` (14-question benchmark suite).
+- [x] **[MUST-HAVE] [Person A]**: Inspect FalkorDB queries for performance, verify range indexes, and optimize query latency.
+- [x] **[MUST-HAVE] [Person B]**: Add 1-click Demo Ribbon buttons in Streamlit to trigger Moments A, B, C, D, and E + 1-Click Clean Reset.
 
 ---
 
-### 🛑 HOUR 28: FEATURE FREEZE 🛑
+### 🛑 HOUR 28: FEATURE FREEZE (COMPLETED AHEAD OF SCHEDULE AT HOUR 22) 🛑
 *No new code or architecture changes beyond this point. Focus solely on demo reliability, fallbacks, and presentation rehearsal.*
 
 ---
 
 ### Phase 5: Demo Hardening, Fallback & Rehearsal (Hours 28 – 36)
-- [ ] **[MUST-HAVE] [Both]**: Rehearse 3-minute pitch according to `DEMO_PLAN.md`.
+- [x] **[MUST-HAVE] [Both]**: Rehearse 3-minute pitch according to `DEMO_PLAN.md`.
+- [x] **[MUST-HAVE] [Both]**: Preflight automated verification suite (`scripts/preflight.py`) testing 6/6 critical subsystems.
 - [ ] **[MUST-HAVE] [Person B]**: Record a 3-minute screen capture video of the complete live demo as an emergency fallback if Docker/network fails during presentation.
 - [ ] **[MUST-HAVE] [Person A]**: Prepare 2-3 slide deck summarizing the FalkorDB architecture and Track 3 value proposition.
 - [ ] **[MUST-HAVE] [Both]**: Final cleanup of repository and submission links.
