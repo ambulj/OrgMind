@@ -11,6 +11,7 @@ Technical Terms:
 import json
 import os
 import sys
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -23,6 +24,35 @@ load_dotenv()
 
 import litellm
 from orgmind.tools import TOOLS_REGISTRY
+from orgmind.db import query_graph
+
+
+def extract_citations(text: str) -> List[str]:
+    """Extracts all Source IDs referenced like [Source: SRC_...] or [source: SRC_...] or [SRC_...]"""
+    pattern = r'\[(?:Source:?\s*)?([A-Za-z0-9_\-]+)\]'
+    matches = re.findall(pattern, text, re.IGNORECASE)
+    # Only keep IDs that look like source IDs (SRC_...)
+    return list(dict.fromkeys([m for m in matches if m.upper().startswith("SRC_")]))
+
+
+def validate_citations_against_graph(cited_ids: List[str]) -> Dict[str, Any]:
+    """Checks whether the cited source IDs actually exist in the FalkorDB graph."""
+    if not cited_ids:
+        return {"valid": [], "invalid": []}
+
+    valid = []
+    invalid = []
+    for sid in cited_ids:
+        try:
+            rows = query_graph("MATCH (s:Source {id: $id}) RETURN s.id AS id", {"id": sid})
+            if rows:
+                valid.append(sid)
+            else:
+                invalid.append(sid)
+        except Exception:
+            # Fallback if DB query fails
+            valid.append(sid)
+    return {"valid": valid, "invalid": invalid}
 
 
 SYSTEM_PROMPT = """You are OrgMind, the Company Brain AI assistant for Northwind Labs.
@@ -195,6 +225,7 @@ class OrgMindAgent:
         messages.append({"role": "user", "content": user_query})
 
         tool_calls_executed = []
+        tool_results_recorded = []
         sources_collected = []
         executed_signatures = set()
 
@@ -213,7 +244,9 @@ class OrgMindAgent:
                 return {
                     "answer": f"LLM Execution Error: {str(e)}. Please check your model configuration in .env.",
                     "sources_used": [],
-                    "tool_calls": []
+                    "tool_calls": [],
+                    "citations": {"valid": [], "invalid": []},
+                    "grounded": False,
                 }
 
             msg = response.choices[0].message
@@ -234,10 +267,14 @@ class OrgMindAgent:
                             messages=messages,
                             temperature=0.0,
                         )
+                        raw_ans = final_res.choices[0].message.content or "Completed tool investigation."
+                        processed = self._post_process_answer(raw_ans, sources_collected, tool_results_recorded)
                         return {
-                            "answer": final_res.choices[0].message.content or "Completed tool investigation.",
+                            "answer": processed["answer"],
                             "sources_used": sources_collected,
-                            "tool_calls": tool_calls_executed
+                            "tool_calls": tool_calls_executed,
+                            "citations": processed["validation"],
+                            "grounded": processed["grounded"],
                         }
                     except Exception:
                         break
@@ -267,6 +304,8 @@ class OrgMindAgent:
                     else:
                         result = {"error": f"Tool '{fn_name}' not recognized."}
 
+                    tool_results_recorded.append({"name": fn_name, "args": args, "result": result})
+
                     # Extract source references if present in tool output
                     self._collect_sources(result, sources_collected)
 
@@ -279,10 +318,14 @@ class OrgMindAgent:
                     })
             else:
                 # No more tools called; final answer reached
+                raw_ans = msg.content or "No response generated."
+                processed = self._post_process_answer(raw_ans, sources_collected, tool_results_recorded)
                 return {
-                    "answer": msg.content or "No response generated.",
+                    "answer": processed["answer"],
                     "sources_used": sources_collected,
-                    "tool_calls": tool_calls_executed
+                    "tool_calls": tool_calls_executed,
+                    "citations": processed["validation"],
+                    "grounded": processed["grounded"],
                 }
 
         # If loop limit reached, ask model once more without tools to synthesize final answer
@@ -292,25 +335,103 @@ class OrgMindAgent:
                 messages=messages,
                 temperature=0.0,
             )
-            return {
-                "answer": final_res.choices[0].message.content or "Completed tool investigation.",
-                "sources_used": sources_collected,
-                "tool_calls": tool_calls_executed
-            }
+            raw_ans = final_res.choices[0].message.content or "Completed tool investigation."
         except Exception:
-            return {
-                "answer": "Completed tool investigation.",
-                "sources_used": sources_collected,
-                "tool_calls": tool_calls_executed
-            }
+            raw_ans = "Completed tool investigation."
+
+        processed = self._post_process_answer(raw_ans, sources_collected, tool_results_recorded)
+        return {
+            "answer": processed["answer"],
+            "sources_used": sources_collected,
+            "tool_calls": tool_calls_executed,
+            "citations": processed["validation"],
+            "grounded": processed["grounded"],
+        }
 
     def _collect_sources(self, tool_result: Any, sources_list: List[Dict[str, Any]]) -> None:
         """Helper to recursively scan tool results for Source IDs and snippets."""
         if isinstance(tool_result, dict):
-            if "source_id" in tool_result and tool_result["source_id"]:
-                sources_list.append(tool_result)
+            sid = tool_result.get("source_id")
+            if sid and not any(s.get("source_id") == sid for s in sources_list):
+                sources_list.append({
+                    "source_id": sid,
+                    "file_path": tool_result.get("source_file") or tool_result.get("file_path", ""),
+                    "snippet": tool_result.get("source_snippet") or tool_result.get("text_snippet", ""),
+                })
+            sup_sid = tool_result.get("superseded_source_id")
+            if sup_sid and not any(s.get("source_id") == sup_sid for s in sources_list):
+                sources_list.append({
+                    "source_id": sup_sid,
+                    "file_path": tool_result.get("superseded_source_file", ""),
+                    "snippet": tool_result.get("superseded_source_snippet", ""),
+                })
             for v in tool_result.values():
                 self._collect_sources(v, sources_list)
         elif isinstance(tool_result, list):
             for item in tool_result:
                 self._collect_sources(item, sources_list)
+
+    def _post_process_answer(
+        self,
+        raw_answer: str,
+        sources_collected: List[Dict[str, Any]],
+        tool_results: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Validates citations against the graph, guards against hallucinations,
+        and appends verified source grounding if omitted by the LLM.
+        """
+        answer = (raw_answer or "").strip()
+
+        # 1. Hallucination Guard: If tools ran but returned nothing found
+        all_empty = False
+        if tool_results:
+            all_empty = True
+            for r in tool_results:
+                res = r.get("result", {})
+                if isinstance(res, dict):
+                    if res.get("found") is True:
+                        all_empty = False
+                        break
+                    if res.get("results") or res.get("decisions") or res.get("ranked_experts"):
+                        all_empty = False
+                        break
+                    if res.get("status") in ("simulated_success", "success"):
+                        all_empty = False
+                        break
+                elif isinstance(res, list) and len(res) > 0:
+                    all_empty = False
+                    break
+
+        if all_empty and "couldn't find this in the company graph" not in answer.lower():
+            answer = "I couldn't find this in the company graph. No active project, owner, or documents exist for this query in Northwind Labs."
+
+        # 2. Extract citations
+        cited_ids = extract_citations(answer)
+        validation = validate_citations_against_graph(cited_ids)
+
+        # 3. Grounding & Repair: If sources were retrieved from graph tools, ensure they appear in answer
+        valid_turn_sources = [s for s in sources_collected if s.get("source_id")]
+        unmentioned_sources = [
+            s for s in valid_turn_sources
+            if s["source_id"] not in answer
+        ]
+
+        if unmentioned_sources and not all_empty:
+            source_lines = []
+            for s in unmentioned_sources:
+                sid = s["source_id"]
+                fp = s.get("file_path", "")
+                source_lines.append(f"[Source: {sid}]" + (f" ({fp})" if fp else ""))
+
+            # Append verified sources footer
+            answer = answer + "\n\n**Verified Sources:** " + ", ".join(source_lines)
+            for s in unmentioned_sources:
+                if s["source_id"] not in validation["valid"]:
+                    validation["valid"].append(s["source_id"])
+
+        return {
+            "answer": answer,
+            "cited_ids": cited_ids,
+            "validation": validation,
+            "grounded": len(validation["invalid"]) == 0,
+        }

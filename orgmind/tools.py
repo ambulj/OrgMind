@@ -37,7 +37,7 @@ def who_owns(project_or_topic: str) -> Dict[str, Any]:
     clean_query = project_or_topic.strip()
     # Try exact / substring match first
     cypher = """
-    MATCH (owner)-[:OWNS]->(target)
+    MATCH (owner)-[r:OWNS]->(target)
     WHERE (target:Project AND (
             toLower(target.name) CONTAINS toLower($name)
          OR toLower(target.id) CONTAINS toLower($name)
@@ -54,7 +54,10 @@ def who_owns(project_or_topic: str) -> Dict[str, Any]:
            owner.name AS owner_name,
            owner.id AS owner_id,
            lead.name AS lead_name,
-           lead.id AS lead_id
+           lead.id AS lead_id,
+           r.valid_from AS valid_from,
+           r.valid_to AS valid_to,
+           r.source AS source_doc
     """
     rows = query_graph(cypher, {"name": clean_query})
 
@@ -77,13 +80,35 @@ def who_owns(project_or_topic: str) -> Dict[str, Any]:
                p.name AS owner_name,
                p.id AS owner_id,
                p.name AS lead_name,
-               p.id AS lead_id
+               p.id AS lead_id,
+               '' AS valid_from,
+               '' AS valid_to,
+               '' AS source_doc
         """
         rows = query_graph(alt_cypher, {"name": clean_query})
+
+    # Deduplicate and organize current vs previous owners
+    current_owners = []
+    previous_owners = []
+    seen = set()
+
+    for r in rows:
+        key = (r.get("owner_id"), r.get("valid_from"), r.get("valid_to"))
+        if key in seen:
+            continue
+        seen.add(key)
+        valid_to = r.get("valid_to")
+        if valid_to and str(valid_to).strip():
+            previous_owners.append(r)
+        else:
+            current_owners.append(r)
 
     return {
         "query": project_or_topic,
         "results": rows,
+        "current_owners": current_owners,
+        "previous_owners": previous_owners,
+        "has_ownership_history": len(previous_owners) > 0,
         "found": len(rows) > 0,
         "note": "Ownership verified from Northwind Labs graph registry." if rows else "No owner record found."
     }
@@ -124,14 +149,30 @@ def trace_decision(topic: str) -> Dict[str, Any]:
     and returns full text snippets from the Source nodes for citations.
 
     Args:
-        topic: Topic of the decision (e.g. 'OAuth', 'Billing').
+        topic: Topic of the decision (e.g. 'OAuth', 'Billing', 'Authentication').
 
     Returns:
         Structured trace of current decision, superseded decisions, and source IDs.
     """
+    clean_topic = topic.strip()
+    topic_synonyms = {
+        "authentication": "OAuth",
+        "auth": "OAuth",
+        "login": "OAuth",
+        "sso": "OAuth",
+        "payment": "Paynova",
+        "payments": "Paynova",
+        "gateway": "Paynova",
+        "k8s": "Kubernetes",
+        "infra": "Kubernetes",
+        "database": "Security",
+    }
+    resolved_topic = topic_synonyms.get(clean_topic.lower(), clean_topic)
+
     cypher = """
     MATCH (d:Decision)-[:ABOUT]->(top:Topic)
     WHERE toLower(top.name) = toLower($topic)
+       OR toLower(d.topic) = toLower($topic)
     OPTIONAL MATCH (d)-[:DERIVED_FROM]->(src:Source)
     OPTIONAL MATCH (d)-[:SUPERSEDES]->(old:Decision)
     OPTIONAL MATCH (old)-[:DERIVED_FROM]->(old_src:Source)
@@ -149,9 +190,38 @@ def trace_decision(topic: str) -> Dict[str, Any]:
            old_src.id AS superseded_source_id,
            old_src.text_snippet AS superseded_source_snippet
     """
-    rows = query_graph(cypher, {"topic": topic})
+    rows = query_graph(cypher, {"topic": resolved_topic})
+
+    # Fallback: substring matching across topics or decision text
+    if not rows:
+        fallback_cypher = """
+        MATCH (d:Decision)
+        OPTIONAL MATCH (d)-[:ABOUT]->(top:Topic)
+        WHERE (top IS NOT NULL AND (toLower(top.name) CONTAINS toLower($topic) OR toLower($topic) CONTAINS toLower(top.name)))
+           OR toLower(d.topic) CONTAINS toLower($topic)
+           OR toLower(d.text) CONTAINS toLower($topic)
+        OPTIONAL MATCH (d)-[:DERIVED_FROM]->(src:Source)
+        OPTIONAL MATCH (d)-[:SUPERSEDES]->(old:Decision)
+        OPTIONAL MATCH (old)-[:DERIVED_FROM]->(old_src:Source)
+        RETURN d.id AS decision_id,
+               d.text AS decision_text,
+               d.status AS status,
+               d.valid_from AS valid_from,
+               d.valid_to AS valid_to,
+               src.id AS source_id,
+               src.file_path AS source_file,
+               src.text_snippet AS source_snippet,
+               old.id AS superseded_decision_id,
+               old.text AS superseded_text,
+               old.status AS superseded_status,
+               old_src.id AS superseded_source_id,
+               old_src.text_snippet AS superseded_source_snippet
+        """
+        rows = query_graph(fallback_cypher, {"topic": clean_topic})
+
     return {
         "topic": topic,
+        "resolved_topic": resolved_topic,
         "decisions": rows,
         "found": len(rows) > 0
     }

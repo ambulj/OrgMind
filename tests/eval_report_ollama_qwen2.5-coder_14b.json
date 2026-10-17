@@ -1,0 +1,64 @@
+{
+  "model": "ollama/qwen2.5-coder:14b",
+  "timestamp": "2026-10-17T12:36:59Z",
+  "total_tests": 3,
+  "passed_tests": 3,
+  "pass_rate_pct": 100.0,
+  "avg_latency_sec": 65.23,
+  "total_latency_sec": 195.68,
+  "results": [
+    {
+      "id": "eval_01",
+      "category": "ownership",
+      "question": "Who owns the OAuth Upgrade project?",
+      "passed": true,
+      "duration_sec": 41.08,
+      "expected_tool": "who_owns",
+      "tools_used": [
+        "who_owns"
+      ],
+      "tool_matched": true,
+      "missing_keywords": [],
+      "valid_citations": [],
+      "invalid_citations": [],
+      "is_grounded": true,
+      "answer_preview": "The OAuth Upgrade project is currently owned by both Alice Chen [P_ALICE] and the Platform & Auth team [T_PLATFORM], as of January 1, 2026 [Source: DOC_AUTH_SPEC]. There is no previous ownership history recorded for this project."
+    },
+    {
+      "id": "eval_02",
+      "category": "who_knows",
+      "question": "Who knows the most about OAuth in the company?",
+      "passed": true,
+      "duration_sec": 43.3,
+      "expected_tool": "who_knows_about",
+      "tools_used": [
+        "who_knows_about"
+      ],
+      "tool_matched": true,
+      "missing_keywords": [],
+      "valid_citations": [
+        "SRC_DOC_AUTH_01"
+      ],
+      "invalid_citations": [],
+      "is_grounded": true,
+      "answer_preview": "Based on the information provided by the tool, the person who knows the most about OAuth in the company is Alice Chen [Source: SRC_DOC_AUTH_01]. She is the Principal Architect and has the highest number of evidence counts (5) related to OAuth, includ"
+    },
+    {
+      "id": "eval_03",
+      "category": "decision_trace",
+      "question": "What is our official decision on authentication and where was it documented?",
+      "passed": true,
+      "duration_sec": 111.3,
+      "expected_tool": "trace_decision",
+      "tools_used": [
+        "trace_decision"
+      ],
+      "tool_matched": true,
+      "missing_keywords": [],
+      "valid_citations": [],
+      "invalid_citations": [],
+      "is_grounded": true,
+      "answer_preview": "Our official decision on authentication is to reject plain code challenges in authorization requests and enforce the S256 code challenge method [DEC_AUTH_2026_02]. This decision replaced an earlier decision to adopt OAuth 2.1 with PKCE for all web/mo"
+    }
+  ]
+}

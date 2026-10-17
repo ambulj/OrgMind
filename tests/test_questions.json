@@ -48,5 +48,33 @@
     "question": "Draft a message to #backend-eng about OAuth token expiry and create a ticket.",
     "expected_tool": "draft_message",
     "must_contain": ["simulated", "ticket", "#backend-eng"]
+  },
+  {
+    "id": "eval_07",
+    "category": "impact_analysis",
+    "question": "What tickets and work are impacted by Paynova, and what is currently blocked?",
+    "expected_tool": "impact_analysis",
+    "must_contain": ["TICK-201", "TICK-202", "blocked"]
+  },
+  {
+    "id": "eval_08",
+    "category": "ownership_transition",
+    "question": "Who owns the Customer Portal Redesign project, and who was the previous owner?",
+    "expected_tool": "who_owns",
+    "must_contain": ["Frank Wright", "Carol Danvers"]
+  },
+  {
+    "id": "eval_09",
+    "category": "who_knows_paynova",
+    "question": "Who has demonstrated knowledge and evidence on Paynova integrations?",
+    "expected_tool": "who_knows_about",
+    "must_contain": ["Rohan Iyer"]
+  },
+  {
+    "id": "eval_10",
+    "category": "provenance_paynova",
+    "question": "What was decided regarding the European payment gateway rail and what is the source document?",
+    "expected_tool": "trace_decision",
+    "must_contain": ["Paynova", "SRC_DOC_PAYNOVA_DECISION_01"]
   }
 ]
