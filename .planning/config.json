@@ -1,0 +1,15 @@
+{
+  "project_name": "OrgMind",
+  "track": "Track 3: Company Brain",
+  "workflow": {
+    "ui_phase": true,
+    "text_mode": false,
+    "model_profile": "balanced"
+  },
+  "database": {
+    "engine": "FalkorDB",
+    "graph_name": "northwind_labs",
+    "host": "localhost",
+    "port": 6379
+  }
+}
