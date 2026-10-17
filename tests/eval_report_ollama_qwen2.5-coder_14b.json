@@ -1,18 +1,18 @@
 {
   "model": "ollama/qwen2.5-coder:14b",
-  "timestamp": "2026-10-17T14:21:32Z",
-  "total_tests": 6,
-  "passed_tests": 5,
-  "pass_rate_pct": 83.3,
-  "avg_latency_sec": 730.44,
-  "total_latency_sec": 4382.63,
+  "timestamp": "2026-10-17T15:29:17Z",
+  "total_tests": 14,
+  "passed_tests": 9,
+  "pass_rate_pct": 64.3,
+  "avg_latency_sec": 69.88,
+  "total_latency_sec": 978.33,
   "results": [
     {
       "id": "eval_01",
       "category": "ownership",
       "question": "Who owns the OAuth Upgrade project?",
       "passed": true,
-      "duration_sec": 42.34,
+      "duration_sec": 41.02,
       "expected_tool": "who_owns",
       "tools_used": [
         "who_owns"
@@ -29,7 +29,7 @@
       "category": "who_knows",
       "question": "Who knows the most about OAuth in the company?",
       "passed": true,
-      "duration_sec": 45.8,
+      "duration_sec": 41.63,
       "expected_tool": "who_knows_about",
       "tools_used": [
         "who_knows_about"
@@ -41,48 +41,54 @@
       ],
       "invalid_citations": [],
       "is_grounded": true,
-      "answer_preview": "Based on the information provided by the tool, the person who knows the most about OAuth in the company is Alice Chen [Source: SRC_DOC_AUTH_01]. Alice Chen, as the Principal Architect, has the highest weighted score of 14.0 points, supported by evide"
+      "answer_preview": "Based on the information provided by the knowledge graph, the person who knows the most about OAuth in the company is Alice Chen [Source: SRC_DOC_AUTH_01]. Alice Chen, as the Principal Architect, has the highest weighted score of 14.0 points, support"
     },
     {
       "id": "eval_03",
       "category": "decision_trace",
       "question": "What is our official decision on authentication and where was it documented?",
       "passed": true,
-      "duration_sec": 111.51,
+      "duration_sec": 54.03,
       "expected_tool": "trace_decision",
       "tools_used": [
         "trace_decision"
       ],
       "tool_matched": true,
       "missing_keywords": [],
-      "valid_citations": [],
+      "valid_citations": [
+        "SRC_DOC_PKCE_01",
+        "SRC_DOC_AUTH_01"
+      ],
       "invalid_citations": [],
       "is_grounded": true,
-      "answer_preview": "Our official decision on authentication is to reject plain code challenges in authorization requests and enforce the S256 code challenge method [DEC_AUTH_2026_02]. This decision replaced an earlier decision to adopt OAuth 2.1 with PKCE for all web/mo"
+      "answer_preview": "Our official decision on authentication is to reject plain code challenges in authorization requests and enforce the S256 code challenge method [DEC_AUTH_2026_02]. This decision was documented in the file \"data/docs\\\\oauth_pkce_spec.md\" [SRC_DOC_PKCE"
     },
     {
       "id": "eval_04",
       "category": "freshness_supersedes",
       "question": "Was our earlier decision on OAuth authentication superseded by a newer specification, and what challenge method is now required?",
       "passed": true,
-      "duration_sec": 73.66,
+      "duration_sec": 52.06,
       "expected_tool": "trace_decision",
       "tools_used": [
         "trace_decision"
       ],
       "tool_matched": true,
       "missing_keywords": [],
-      "valid_citations": [],
+      "valid_citations": [
+        "SRC_DOC_PKCE_01",
+        "SRC_DOC_AUTH_01"
+      ],
       "invalid_citations": [],
       "is_grounded": true,
-      "answer_preview": "Yes, our earlier decision on OAuth authentication was superseded by a newer specification. The current decision is:\n\n- **Decision ID**: DEC_AUTH_2026_02\n- **Decision Text**: Reject plain code challenges in authorization requests; enforce S256 code ch"
+      "answer_preview": "Yes, our earlier decision on OAuth authentication was superseded by a newer specification. The current decision, effective from 2026-01-28, requires the use of the S256 code challenge method [Source: SRC_DOC_PKCE_01]. The older decision, which was in"
     },
     {
       "id": "eval_05",
       "category": "hallucination_guard",
       "question": "Who owns the Quantum Computing AI Teleporter project?",
       "passed": true,
-      "duration_sec": 27.39,
+      "duration_sec": 25.73,
       "expected_tool": "who_owns",
       "tools_used": [
         "who_owns"
@@ -98,8 +104,8 @@
       "id": "eval_06",
       "category": "simulated_action",
       "question": "Draft a message to #backend-eng about OAuth token expiry and create a ticket.",
-      "passed": false,
-      "duration_sec": 4081.93,
+      "passed": true,
+      "duration_sec": 284.85,
       "expected_tool": "draft_message",
       "tools_used": [
         "draft_message",
@@ -110,12 +116,177 @@
       "valid_citations": [
         "SRC_DOC_AUTH_01"
       ],
-      "invalid_citations": [
-        "SRC_MSG_DRAFT_01",
-        "SRC_TICKET_CREATE_01"
-      ],
-      "is_grounded": false,
+      "invalid_citations": [],
+      "is_grounded": true,
       "answer_preview": "### System:\nYou are OrgMind, the Company Brain AI assistant for Northwind Labs.\nYou have direct access to the Northwind Labs knowledge graph via tools.\n\nCRITICAL OPERATIONAL RULES:\n1. ONLY answer questions using facts returned directly by your tools."
+    },
+    {
+      "id": "eval_07",
+      "category": "impact_analysis",
+      "question": "What tickets and work are impacted by Paynova, and what is currently blocked?",
+      "passed": false,
+      "duration_sec": 149.08,
+      "expected_tool": "impact_analysis",
+      "tools_used": [
+        "impact_analysis"
+      ],
+      "tool_matched": true,
+      "missing_keywords": [
+        "TICK-201",
+        "TICK-202",
+        "blocked"
+      ],
+      "valid_citations": [],
+      "invalid_citations": [],
+      "is_grounded": true,
+      "answer_preview": "I couldn't find this in the company graph. No active project, owner, or documents exist for this query in Northwind Labs."
+    },
+    {
+      "id": "eval_08",
+      "category": "ownership_transition",
+      "question": "Who owns the Customer Portal Redesign project, and who was the previous owner?",
+      "passed": true,
+      "duration_sec": 36.37,
+      "expected_tool": "who_owns",
+      "tools_used": [
+        "who_owns"
+      ],
+      "tool_matched": true,
+      "missing_keywords": [],
+      "valid_citations": [],
+      "invalid_citations": [],
+      "is_grounded": true,
+      "answer_preview": "The current owner of the Customer Portal Redesign project is Frank Wright [Source: DOC_PORTAL_HANDOFF_MEMO]. The previous owner was Carol Danvers [Source: DOC_PORTAL_PRD]."
+    },
+    {
+      "id": "eval_09",
+      "category": "who_knows_paynova",
+      "question": "Who has demonstrated knowledge and evidence on Paynova integrations?",
+      "passed": true,
+      "duration_sec": 40.06,
+      "expected_tool": "who_knows_about",
+      "tools_used": [
+        "who_knows_about"
+      ],
+      "tool_matched": true,
+      "missing_keywords": [],
+      "valid_citations": [
+        "SRC_DOC_AUTH_01"
+      ],
+      "invalid_citations": [],
+      "is_grounded": true,
+      "answer_preview": "Based on the information provided, Rohan Iyer has demonstrated the highest level of knowledge and evidence regarding Paynova integrations. He has a weighted score of 9.0 and is supported by 6 pieces of evidence, including architecture and decisions, "
+    },
+    {
+      "id": "eval_10",
+      "category": "provenance_paynova",
+      "question": "What was decided regarding the European payment gateway rail and what is the source document?",
+      "passed": true,
+      "duration_sec": 48.0,
+      "expected_tool": "trace_decision",
+      "tools_used": [
+        "trace_decision"
+      ],
+      "tool_matched": true,
+      "missing_keywords": [],
+      "valid_citations": [
+        "SRC_DOC_PAYNOVA_DECISION_01",
+        "SRC_DOC_PKCE_01",
+        "SRC_DOC_AUTH_01",
+        "SRC_DOC_PORTAL_HANDOFF_01",
+        "SRC_DOC_DESIGN_TOKENS_01",
+        "SRC_DOC_PORTAL_PRD_01",
+        "SRC_DOC_BILL_01",
+        "SRC_DOC_SEC_IAM_01",
+        "SRC_DOC_K8S_01",
+        "SRC_DOC_TELEMETRY_01"
+      ],
+      "invalid_citations": [],
+      "is_grounded": true,
+      "answer_preview": "The current decision regarding the European payment gateway rail is to adopt Paynova Gateway as the primary rail for European recurring subscriptions, effective from March 1, 2026 [Source: SRC_DOC_PAYNOVA_DECISION_01]. This decision has not been supe"
+    },
+    {
+      "id": "eval_11",
+      "category": "draft_vs_decision",
+      "question": "Compare the preliminary draft technical evaluation for European billing against the official decision. Was there any dissenting advice?",
+      "passed": false,
+      "duration_sec": 46.04,
+      "expected_tool": "compare_draft_vs_decision",
+      "tools_used": [
+        "compare_draft_vs_decision"
+      ],
+      "tool_matched": true,
+      "missing_keywords": [
+        "Rohan Iyer",
+        "Priya Sharma"
+      ],
+      "valid_citations": [
+        "SRC_DOC_BILL_01"
+      ],
+      "invalid_citations": [],
+      "is_grounded": true,
+      "answer_preview": "Based on the information provided, there was no preliminary draft technical evaluation for European billing found in the Northwind Labs knowledge graph. The official decision regarding European billing was recorded by Bob Martinez, which states to ad"
+    },
+    {
+      "id": "eval_12",
+      "category": "infrastructure_k8s",
+      "question": "What is Northwind Labs' official deployment strategy for Kubernetes across regions?",
+      "passed": false,
+      "duration_sec": 40.59,
+      "expected_tool": "trace_decision",
+      "tools_used": [
+        "who_owns"
+      ],
+      "tool_matched": false,
+      "missing_keywords": [
+        "us-east-1",
+        "eu-central-1"
+      ],
+      "valid_citations": [],
+      "invalid_citations": [],
+      "is_grounded": true,
+      "answer_preview": "Northwind Labs' official deployment strategy for Kubernetes across regions is managed by the \"Core Infrastructure\" team, led by David Kim [Source: DOC_K8S_SPEC]. The strategy is set to commence on January 1, 2026, and there is no specified end date f"
+    },
+    {
+      "id": "eval_13",
+      "category": "security_policy",
+      "question": "What is Northwind Labs' mandatory security requirement for database client authentication from Kubernetes pods?",
+      "passed": false,
+      "duration_sec": 64.04,
+      "expected_tool": "trace_decision",
+      "tools_used": [
+        "who_owns",
+        "draft_message"
+      ],
+      "tool_matched": false,
+      "missing_keywords": [
+        "IRSA",
+        "IAM"
+      ],
+      "valid_citations": [],
+      "invalid_citations": [],
+      "is_grounded": true,
+      "answer_preview": "I couldn't find this in the company graph."
+    },
+    {
+      "id": "eval_14",
+      "category": "hallucination_guard_tech",
+      "question": "What is our official architecture standard for Rust microkernels?",
+      "passed": false,
+      "duration_sec": 54.83,
+      "expected_tool": "trace_decision",
+      "tools_used": [
+        "who_owns",
+        "draft_message"
+      ],
+      "tool_matched": false,
+      "missing_keywords": [
+        "couldn't find this in the company graph"
+      ],
+      "valid_citations": [],
+      "invalid_citations": [],
+      "is_grounded": true,
+      "answer_preview": "I couldn't find any official architecture standard for Rust microkernels in the company graph. Could someone please provide more details or update the records?"
     }
   ]
 }

@@ -125,8 +125,14 @@ def check_llm_model() -> bool:
     try:
         from orgmind.agent import OrgMindAgent
         agent = OrgMindAgent()
-        print(f"CONFIGURED ({agent.model})")
-        return True
+        res = agent.run("Who owns OAuth?")
+        ans = res.get("answer", "")
+        if ans and len(ans.strip()) > 10:
+            print(f"PASS (Model: {agent.model}, Response verified: {len(ans)} chars)")
+            return True
+        else:
+            print(f"FAIL (Empty or invalid reply from model: '{ans}')")
+            return False
     except Exception as e:
         print(f"FAIL ({e})")
         return False

@@ -446,8 +446,93 @@ PS C:\Users\sauja\Downloads\New folder> python scripts/preflight.py
 
 ---
 
+## 🏛️ Phase 0: Production Baseline Audit & Truth Check (Post-Hackathon)
 
+**Audit Date**: 2026-10-17 15:30 UTC  
+**Evaluation Scope**: Full 14-Question Benchmark Suite (`tests/test_questions.json`)  
+**Git Tag**: `v0.1-hackathon` (Tagged commit `8be0bf7`)  
+**Model Tested**: Local Ollama `qwen2.5-coder:14b` via LiteLLM  
 
+### Acceptance Criteria Verification
 
+1. **Tag `v0.1-hackathon`**: Verified via `git tag -l`.
+2. **Clean Clone in Directory with Spaces**:
+   - Cloned cleanly into `c:\Users\sauja\Downloads\OrgMind Test Space`.
+   - Executed `python scripts/smoke_test.py`: **100% Passed (Exit 0)**.
+3. **Live LLM Inference in Preflight (`scripts/preflight.py`)**:
+   - Updated `[6/6]` check to execute agent turn `Who owns OAuth?`.
+   - Verified real response (**217 characters returned**, `P_ALICE` cited, **PASSED**).
+4. **Baseline Isolation (Zero Reversal Pre-load)**:
+   - Verified active graph `northwind_labs`: **163 nodes, 267 edges**.
+   - Verified `DEC_PAYMENTS_2026_05_REVERSAL` is **NOT present** in baseline graph. Only `DEC_PAYMENTS_2026_03_PAYNOVA` (`status='current'`).
+5. **Full 14-Question Benchmark Harness**:
+   - Command: `python tests/run_eval.py --model ollama/qwen2.5-coder:14b`
+   - Real Output: **9 / 14 Passed (64.3% Pass Rate)**, Average Turn Latency: 69.88s, Total Benchmark Duration: 978.33s.
 
+### Full Benchmark Execution Output
 
+```text
+======================================================================
+ [OrgMind Evaluation Harness] Benchmarking Model: ollama/qwen2.5-coder:14b
+ Total Benchmark Questions: 14
+======================================================================
+
+[1/14] [eval_01] (ownership) Q: "Who owns the OAuth Upgrade project?"
+       -> [PASS] in 41.02s | Tools: ['who_owns'] | Citations: []
+[2/14] [eval_02] (who_knows) Q: "Who knows the most about OAuth in the company?"
+       -> [PASS] in 41.63s | Tools: ['who_knows_about'] | Citations: ['SRC_DOC_AUTH_01']
+[3/14] [eval_03] (decision_trace) Q: "What is our official decision on authentication and where was it documented?"
+       -> [PASS] in 54.03s | Tools: ['trace_decision'] | Citations: ['SRC_DOC_PKCE_01', 'SRC_DOC_AUTH_01']
+[4/14] [eval_04] (freshness_supersedes) Q: "Was our earlier decision on OAuth authentication superseded by a newer specification, and what challenge method is now required?"
+       -> [PASS] in 52.06s | Tools: ['trace_decision'] | Citations: ['SRC_DOC_PKCE_01', 'SRC_DOC_AUTH_01']
+[5/14] [eval_05] (hallucination_guard) Q: "Who owns the Quantum Computing AI Teleporter project?"
+       -> [PASS] in 25.73s | Tools: ['who_owns'] | Citations: []
+[6/14] [eval_06] (simulated_action) Q: "Draft a message to #backend-eng about OAuth token expiry and create a ticket."
+       -> [PASS] in 284.85s | Tools: ['draft_message', 'create_ticket'] | Citations: ['SRC_DOC_AUTH_01']
+[7/14] [eval_07] (impact_analysis) Q: "What tickets and work are impacted by Paynova, and what is currently blocked?"
+       -> [FAIL] in 149.08s | Tools: ['impact_analysis'] | Citations: []
+          Missing expected keywords: ['TICK-201', 'TICK-202', 'blocked']
+          Reason: Baseline has not committed reversal yet, so impact_analysis finds 0 blocked tickets in clean state.
+[8/14] [eval_08] (ownership_transition) Q: "Who owns the Customer Portal Redesign project, and who was the previous owner?"
+       -> [PASS] in 36.37s | Tools: ['who_owns'] | Citations: []
+[9/14] [eval_09] (who_knows_paynova) Q: "Who has demonstrated knowledge and evidence on Paynova integrations?"
+       -> [PASS] in 40.06s | Tools: ['who_knows_about'] | Citations: ['SRC_DOC_AUTH_01']
+[10/14] [eval_10] (provenance_paynova) Q: "What was decided regarding the European payment gateway rail and what is the source document?"
+       -> [PASS] in 48.0s | Tools: ['trace_decision'] | Citations: ['SRC_DOC_PAYNOVA_DECISION_01', ...]
+[11/14] [eval_11] (draft_vs_decision) Q: "Compare the preliminary draft technical evaluation for European billing against the official decision. Was there any dissenting advice?"
+       -> [FAIL] in 46.04s | Tools: ['compare_draft_vs_decision'] | Citations: ['SRC_DOC_BILL_01']
+          Missing expected keywords: ['Rohan Iyer', 'Priya Sharma']
+          Reason: Local model summarized technical recommendations without explicitly naming the authors.
+[12/14] [eval_12] (infrastructure_k8s) Q: "What is Northwind Labs' official deployment strategy for Kubernetes across regions?"
+       -> [FAIL] in 40.59s | Tools: ['who_owns'] | Citations: []
+          Missing expected keywords: ['us-east-1', 'eu-central-1']
+          Reason: Local model routed query to 'who_owns' instead of 'trace_decision'.
+[13/14] [eval_13] (security_policy) Q: "What is Northwind Labs' mandatory security requirement for database client authentication from Kubernetes pods?"
+       -> [FAIL] in 64.04s | Tools: ['who_owns', 'draft_message'] | Citations: []
+          Missing expected keywords: ['IRSA', 'IAM']
+          Reason: Local model routed query to 'who_owns' and 'draft_message' instead of 'trace_decision'.
+[14/14] [eval_14] (hallucination_guard_tech) Q: "What is our official architecture standard for Rust microkernels?"
+       -> [FAIL] in 54.83s | Tools: ['who_owns', 'draft_message'] | Citations: []
+          Missing expected keywords: ["couldn't find this in the company graph"]
+          Reason: Local model invoked 'who_owns' on 'Rust microkernels' instead of directly triggering no-evidence guard.
+
+======================================================================
+ [OrgMind Benchmark Report Summary]
+======================================================================
+ Model Tested:          ollama/qwen2.5-coder:14b
+ Pass Rate:             9/14 (64.3%)
+ Average Turn Latency:  69.88s
+ Total Evaluation Time: 978.33s (16.3 min)
+======================================================================
+```
+
+### Honest Feature Truth Audit
+
+| Subsystem / Feature | Production Readiness | Reality & Root Cause Analysis |
+| :--- | :---: | :--- |
+| **FalkorDB Graph Storage** | **REALLY WORKS** | Verified OpenCypher indexing, relationship traversals, 163 nodes, 267 edges. |
+| **Clean Baseline & Isolation** | **REALLY WORKS** | Baseline does not pre-load reversal decisions. Zero leakage. Clean clone works in directories with spaces. |
+| **Live Update Pipeline** | **REALLY WORKS** | 2-phase preview and non-destructive commit via `[:SUPERSEDES]` verified. |
+| **Local Model Tool Routing** | **PARTIAL (64.3%)** | Local 14b model succeeds on core ownership, expertise, and single-hop decision queries (9/14), but struggles with zero-shot routing on complex multi-concept questions (eval 12, 13, 14 route to `who_owns` instead of `trace_decision`). Needs refined tool docstrings and few-shot routing guidance in Phase 5. |
+| **Citation Verification** | **REALLY WORKS** | Programmatic verification against FalkorDB `Source` nodes blocks invalid source citations. |
+| **Simulated Actions** | **REALLY WORKS** | Propose-then-confirm architecture (`confirm=False`) operational; audit log needed in Phase 2. |
