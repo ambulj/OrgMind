@@ -12,7 +12,9 @@ from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
+    Float,
     ForeignKey,
+    Integer,
     String,
     Text,
     create_engine,
@@ -103,6 +105,93 @@ class AuditLog(Base):
     timestamp = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False, index=True)
 
     workspace = relationship("Workspace", back_populates="audit_logs")
+
+
+class AnswerTrace(Base):
+    """Execution telemetry and grounded verification trace for an answer."""
+
+    __tablename__ = "answer_traces"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    workspace_id = Column(String(36), ForeignKey("workspaces.id"), nullable=False, index=True)
+    user_id = Column(String(36), nullable=True, index=True)
+    question = Column(Text, nullable=False)
+    answer = Column(Text, nullable=False)
+    sources_cited = Column(Text, default="[]", nullable=False)  # JSON array of Source IDs
+    validation_status = Column(String(50), default="ok", nullable=False)  # ok | repaired | blocked
+    confidence_label = Column(String(50), default="Medium", nullable=False)  # High | Medium | Low
+    confidence_score = Column(Float, default=0.8, nullable=False)
+    trace_data = Column(Text, default="{}", nullable=False)  # JSON details (tool calls, timings)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False, index=True)
+
+    feedbacks = relationship("Feedback", back_populates="answer", cascade="all, delete-orphan")
+
+
+class Feedback(Base):
+    """User feedback and rating on an answer."""
+
+    __tablename__ = "feedbacks"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    answer_id = Column(String(36), ForeignKey("answer_traces.id"), nullable=False, index=True)
+    workspace_id = Column(String(36), ForeignKey("workspaces.id"), nullable=False, index=True)
+    user_id = Column(String(36), nullable=False)
+    rating = Column(Integer, nullable=False)  # +1 (thumbs up) or -1 (thumbs down)
+    comment = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False)
+
+    answer = relationship("AnswerTrace", back_populates="feedbacks")
+
+
+class IngestionJob(Base):
+    """Background ingestion tracking job."""
+
+    __tablename__ = "ingestion_jobs"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    workspace_id = Column(String(36), ForeignKey("workspaces.id"), nullable=False, index=True)
+    connector_type = Column(String(100), nullable=False)  # file_upload | sample_data | watched_folder
+    source_uri = Column(String(500), nullable=False)
+    status = Column(String(50), default="pending", nullable=False)  # pending | running | completed | failed
+    items_processed = Column(Integer, default=0, nullable=False)
+    items_failed = Column(Integer, default=0, nullable=False)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False, index=True)
+    completed_at = Column(DateTime, nullable=True)
+
+
+class ReviewItem(Base):
+    """Items queued for human-in-the-loop review (e.g. unknown handles, decision reversals)."""
+
+    __tablename__ = "review_items"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    workspace_id = Column(String(36), ForeignKey("workspaces.id"), nullable=False, index=True)
+    item_type = Column(String(100), nullable=False)  # unknown_person | decision_reversal | low_confidence
+    status = Column(String(50), default="pending", nullable=False)  # pending | approved | rejected | edited
+    summary = Column(Text, nullable=False)
+    payload = Column(Text, default="{}", nullable=False)  # JSON payload
+    before_diff = Column(Text, nullable=True)
+    after_diff = Column(Text, nullable=True)
+    reviewed_by = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False, index=True)
+    reviewed_at = Column(DateTime, nullable=True)
+
+
+class ProposedAction(Base):
+    """Two-phase safety propose-then-confirm action records."""
+
+    __tablename__ = "proposed_actions"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    workspace_id = Column(String(36), ForeignKey("workspaces.id"), nullable=False, index=True)
+    action_type = Column(String(100), nullable=False)  # create_ticket | draft_message | assign_task
+    status = Column(String(50), default="proposed", nullable=False)  # proposed | confirmed | cancelled
+    payload = Column(Text, default="{}", nullable=False)  # JSON payload
+    proposed_by = Column(String(100), nullable=False)
+    confirmed_by = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC), nullable=False, index=True)
+    resolved_at = Column(DateTime, nullable=True)
 
 
 # Database engine and session factories

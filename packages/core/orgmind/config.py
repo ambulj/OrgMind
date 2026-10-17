@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     # Environment
     ENV: str = "development"
     DEBUG: bool = False
+    API_HOST: str = "0.0.0.0"
+    API_PORT: int = 8000
 
     # FalkorDB Graph Database
     FALKORDB_HOST: str = "localhost"
@@ -29,6 +31,7 @@ class Settings(BaseSettings):
 
     # Background Job Queue (Dedicated Redis instance on port 6380, separate from FalkorDB)
     REDIS_JOBS_URL: str = "redis://localhost:6380/0"
+    REDIS_URL: str = "redis://localhost:6380/0"
 
     # Authentication & Session Security
     JWT_SECRET_KEY: str = "orgmind-super-secret-key-for-development-change-in-production-32bytes"

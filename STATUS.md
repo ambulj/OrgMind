@@ -645,4 +645,49 @@ PS C:\Users\sauja\Downloads\New folder> python scripts/preflight.py
 - **Smoke Test**: **ALL CHECKS PASSED (EXIT 0)**
 - **Legacy Streamlit App**: **HTTP 200 OK**
 
+---
+
+## 🚀 Phase 4: API Layer (FastAPI v1, SSE Streaming, Lineage & Two-Phase Actions)
+
+**Completion Date**: 2026-10-17 18:20 UTC  
+**Capabilities Delivered**:
+
+1. **Versioned REST API under `/api/v1`**:
+   - Comprehensive OpenAPI documentation exported to [`docs/openapi.json`](file:///c:/Users/sauja/Downloads/New%20folder/docs/openapi.json) with 24 operational endpoints and schema contracts.
+   - Detailed endpoint and SSE specification documented in [`docs/API.md`](file:///c:/Users/sauja/Downloads/New%20folder/docs/API.md).
+2. **Standardized Error Envelope & Pagination**:
+   - Global exception handlers guarantee all 4xx/5xx responses return typed `{"error": {"code", "message", "details", "request_id", "timestamp"}}`.
+   - Collections implement `page`, `page_size`, `total`, `total_pages` pagination.
+3. **Server-Sent Events (SSE) Streaming Engine (`POST /api/v1/ask`)**:
+   - Full streaming execution yielding 10 typed events in real time: `step`, `tool_call`, `tool_result_summary`, `token`, `citation`, `validation`, `confidence`, `freshness`, `proposed_action`, `done`.
+   - Automatically records full execution trace in the relational database (`AnswerTrace`).
+4. **Answer Tracing & User Feedback**:
+   - `GET /api/v1/answers/{id}/trace` exposes complete intermediate tool inputs, outputs, timings, and validation status.
+   - `POST /api/v1/answers/{id}/feedback` stores thumbs-up/down ratings and qualitative commentary.
+5. **Entity Catalog & Decision Lineage**:
+   - `GET /api/v1/entities/{type}` & `GET /api/v1/entities/{type}/{id}`: Catalog and detail exploration for people, projects, teams, topics, decisions, tickets, and documents with 1-hop connected relationships.
+   - `GET /api/v1/decisions/{id}/lineage`: Supersession graph traversal tracking historical replacements and source anchors.
+6. **Graph Subgraphs & Semantic Paths**:
+   - `GET /api/v1/graph/neighborhood?entity=&hops=2`: N-hop visual subgraph extraction.
+   - `GET /api/v1/graph/path?from=&to=`: Directed shortest-path discovery between disparate concepts in the knowledge graph.
+7. **Sources & Two-Phase Safety Actions**:
+   - `GET /api/v1/sources/{id}`: Permission-gated source text retrieval with tombstone redaction masking.
+   - `POST /api/v1/actions/propose`: Dry-run action proposal without external mutation.
+   - `POST /api/v1/actions/confirm`: Role-gated confirmation executing the tool and logging an immutable event to `audit_logs`.
+   - `POST /api/v1/actions/cancel`: Abort a proposed action.
+8. **Governance, Ingestion & Health**:
+   - `GET /api/v1/audit`: Paginated audit log search filtered by actor, action, and entity type.
+   - `POST /api/v1/ingestion/jobs`: Asynchronous connector job enqueuing.
+   - `GET /api/v1/reviews`: Human-in-the-loop review queue for unknown aliases and decision reversals.
+   - `GET /api/v1/health`: Deep multi-system health report covering FalkorDB, SQLite/Postgres, Redis queues.
+
+### Acceptance Criteria Verification
+
+- **Automated Tests**: **35 / 35 PASSED (100% in 6.76s)**
+  - Contract and SSE streaming tests in `tests/test_api.py`: **10 / 10 PASSED**
+- **Ruff Linter**: **All checks passed!**
+- **Mypy Type Checking**: **Success: no issues found in 12 source files**
+- **Smoke Test**: **ALL CHECKS PASSED (EXIT 0)**
+- **Legacy Streamlit App**: **HTTP 200 OK**
+
 
