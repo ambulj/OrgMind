@@ -6,10 +6,11 @@ Technical Terms:
 - Canonical Entity: The authoritative, primary identity record in the database.
 """
 
-from typing import Dict, Optional, List, Any
 import csv
-import os
 import difflib
+import os
+from pathlib import Path
+from typing import Any
 
 
 class EntityResolver:
@@ -17,18 +18,23 @@ class EntityResolver:
 
     def __init__(self, people_csv_path: str = "data/people.csv"):
         self.people_csv_path = people_csv_path
-        self.alias_to_id: Dict[str, str] = {}
-        self.id_to_person: Dict[str, Dict[str, str]] = {}
-        self.flagged_unknowns: List[Dict[str, Any]] = []
+        self.alias_to_id: dict[str, str] = {}
+        self.id_to_person: dict[str, dict[str, str]] = {}
+        self.flagged_unknowns: list[dict[str, Any]] = []
         self.load_people()
 
     def load_people(self) -> None:
         """Parses the master people.csv and builds bidirectional lookup dictionaries."""
         if not os.path.exists(self.people_csv_path):
-            print(f"[Resolver] Warning: {self.people_csv_path} not found.")
-            return
+            repo_root = Path(__file__).resolve().parent.parent.parent.parent
+            alt_path = repo_root / self.people_csv_path
+            if alt_path.exists():
+                self.people_csv_path = str(alt_path)
+            else:
+                print(f"[Resolver] Warning: {self.people_csv_path} not found.")
+                return
 
-        with open(self.people_csv_path, mode="r", encoding="utf-8") as f:
+        with open(self.people_csv_path, encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 pid = row["id"].strip()
@@ -54,7 +60,7 @@ class EntityResolver:
                     if clean_alias.startswith("@"):
                         self.alias_to_id[clean_alias.lstrip("@")] = pid
 
-    def resolve_with_status(self, raw_mention: str, fuzzy_threshold: float = 0.8) -> Dict[str, Any]:
+    def resolve_with_status(self, raw_mention: str, fuzzy_threshold: float = 0.8) -> dict[str, Any]:
         """Resolves a raw text mention or handle to a canonical Person ID with status metadata.
 
         Returns dict with keys:
@@ -101,7 +107,9 @@ class EntityResolver:
 
         # 2. Fuzzy match fallback
         candidates = list(self.alias_to_id.keys())
-        close_matches = difflib.get_close_matches(clean_no_at, candidates, n=1, cutoff=fuzzy_threshold)
+        close_matches = difflib.get_close_matches(
+            clean_no_at, candidates, n=1, cutoff=fuzzy_threshold
+        )
         if close_matches:
             best_match = close_matches[0]
             ratio = difflib.SequenceMatcher(None, clean_no_at, best_match).ratio()
@@ -131,7 +139,9 @@ class EntityResolver:
             "flag_for_review": True,
         }
 
-    def resolve_person(self, raw_mention: str, allow_fuzzy: bool = True, fuzzy_threshold: float = 0.8) -> Optional[str]:
+    def resolve_person(
+        self, raw_mention: str, allow_fuzzy: bool = True, fuzzy_threshold: float = 0.8
+    ) -> str | None:
         """Resolves a raw text mention or handle to a canonical Person ID.
 
         Args:
@@ -147,11 +157,11 @@ class EntityResolver:
             return res["resolved_id"]
         return None
 
-    def get_flagged_unknowns(self) -> List[Dict[str, Any]]:
+    def get_flagged_unknowns(self) -> list[dict[str, Any]]:
         """Returns the list of author handles/mentions flagged for review."""
         return list(self.flagged_unknowns)
 
-    def get_person_details(self, person_id: str) -> Optional[Dict[str, str]]:
+    def get_person_details(self, person_id: str) -> dict[str, str] | None:
         """Retrieves canonical metadata for a person."""
         return self.id_to_person.get(person_id)
 

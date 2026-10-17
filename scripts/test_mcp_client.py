@@ -8,18 +8,17 @@ Validates:
 5. FalkorDB read-only query execution verification.
 """
 
-import sys
-import os
-import json
 import asyncio
+import json
+import sys
 from pathlib import Path
 
 project_root = str(Path(__file__).resolve().parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+from orgmind.db import query_graph
 from orgmind.mcp_server import mcp
-from orgmind.db import query_graph, get_graph
 
 
 async def test_mcp_tools():
@@ -88,7 +87,9 @@ async def test_mcp_tools():
     assert not res_raw.is_error, f"MCP tool returned error: {res_raw}"
     payload = json.loads(res_raw.content[0].text)
     decisions = payload.get("decisions", [])
-    active_dec = next((d for d in decisions if d.get("status") == "current"), decisions[0] if decisions else {})
+    active_dec = next(
+        (d for d in decisions if d.get("status") == "current"), decisions[0] if decisions else {}
+    )
     print(f" Active Decision ID: {active_dec.get('decision_id')}")
     print(f" Decision Text: {active_dec.get('decision_text')}")
     print(f" Source File: {active_dec.get('source_file')}")
@@ -126,18 +127,23 @@ async def test_mcp_tools():
     # Step 7: Test Action Simulation Safety (confirm=False)
     # -------------------------------------------------------------
     print("\n[Step 7] Testing Action Simulation Safety over MCP (confirm=False)...")
-    res_raw = await mcp.call_tool("create_ticket", {
-        "title": "Evaluate EU SEPA Webhook Reliability",
-        "description": "Assess idempotency compliance for recurring SEPA transfers.",
-        "project_id": "PRJ_BILLING_STRIPE",
-        "confirm": False
-    })
+    res_raw = await mcp.call_tool(
+        "create_ticket",
+        {
+            "title": "Evaluate EU SEPA Webhook Reliability",
+            "description": "Assess idempotency compliance for recurring SEPA transfers.",
+            "project_id": "PRJ_BILLING_STRIPE",
+            "confirm": False,
+        },
+    )
     assert not res_raw.is_error, f"MCP tool returned error: {res_raw}"
     payload = json.loads(res_raw.content[0].text)
     print(f" Proposal Status: {payload.get('status')}")
     print(f" Confirm Required: {payload.get('confirm_required')}")
     print(f" Proposed Ticket Title: {payload.get('preview', {}).get('title')}")
-    assert payload.get("status") == "proposed_pending_confirmation", f"Expected proposed_pending_confirmation, got {payload}"
+    assert payload.get("status") == "proposed_pending_confirmation", (
+        f"Expected proposed_pending_confirmation, got {payload}"
+    )
     assert payload.get("confirm_required") is True
     print(" -> PASS: Action simulation returned approval preview without mutating graph.")
 

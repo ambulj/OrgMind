@@ -536,3 +536,37 @@ PS C:\Users\sauja\Downloads\New folder> python scripts/preflight.py
 | **Local Model Tool Routing** | **PARTIAL (64.3%)** | Local 14b model succeeds on core ownership, expertise, and single-hop decision queries (9/14), but struggles with zero-shot routing on complex multi-concept questions (eval 12, 13, 14 route to `who_owns` instead of `trace_decision`). Needs refined tool docstrings and few-shot routing guidance in Phase 5. |
 | **Citation Verification** | **REALLY WORKS** | Programmatic verification against FalkorDB `Source` nodes blocks invalid source citations. |
 | **Simulated Actions** | **REALLY WORKS** | Propose-then-confirm architecture (`confirm=False`) operational; audit log needed in Phase 2. |
+
+---
+
+## 🏗️ Phase 1: Monorepo Restructure & Engineering Quality Gate
+
+**Completion Date**: 2026-10-17 16:05 UTC  
+**Monorepo Layout**:
+- `packages/core/orgmind`: Clean core library with dedicated `packages/core/pyproject.toml`
+- `apps/legacy-streamlit`: Preserved hackathon UI (`apps/legacy-streamlit/streamlit_app.py`, verified running on port 8501, HTTP 200 OK)
+- `apps/api`: Scaffolded FastAPI service
+- `apps/web`: Scaffolded Next.js / TypeScript frontend application
+- `infra/`: Docker compose and infrastructure configs (`infra/docker-compose.yml`)
+- `docs/`: Centralized architecture, schema, tasks, and guide documentation
+- `scripts/`: Operational tools (`smoke_test.py`, `preflight.py`, `reset_demo.py`)
+- `tests/`: 12 automated pytest unit tests + 14-question benchmark suite
+
+### Quality Gates Verified
+
+1. **Ruff Linter & Formatter**:
+   - `python -m ruff check packages/core apps scripts tests`: **PASS (All checks passed!)**
+   - `python -m ruff format packages/core apps scripts tests`: **PASS (Cleanly formatted)**
+2. **Mypy Static Type Checking**:
+   - `python -m mypy packages/core`: **PASS (Success: no issues found in 9 source files)**
+3. **Unit Tests**:
+   - `pytest tests/ -v`: **12 / 12 PASSED (100% in 3.87s)**
+4. **Smoke Test**:
+   - `python scripts/smoke_test.py`: **PASS (Exit 0)**
+5. **Streamlit App Live Verification**:
+   - `http://localhost:8501/_stcore/health`: **HTTP 200 OK**
+6. **Task Runners**:
+   - `Makefile` and `tasks.ps1` operational (`./tasks.ps1 test`, `./tasks.ps1 lint`).
+7. **GitHub Actions CI**:
+   - `.github/workflows/ci.yml` configured with FalkorDB service container, lint, typecheck, seed, and pytest.
+

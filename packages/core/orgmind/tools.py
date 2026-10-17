@@ -7,25 +7,23 @@ Technical Terms:
 - Provenance Retrieval: Fetching the exact text chunk (`Source`) that substantiates a fact.
 """
 
-import os
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-from datetime import datetime, timezone
-import json
+from typing import Any
 
 project_root = str(Path(__file__).resolve().parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from orgmind.db import query_graph, get_graph
-
+from orgmind.db import get_graph, query_graph
 
 # ============================================================================
 # READ TOOLS (Graph Intelligence & Provenance)
 # ============================================================================
 
-def who_owns(project_or_topic: str) -> Dict[str, Any]:
+
+def who_owns(project_or_topic: str) -> dict[str, Any]:
     """Finds the designated owner (Person or Team) for a specific Project or Topic.
 
     Args:
@@ -63,7 +61,11 @@ def who_owns(project_or_topic: str) -> Dict[str, Any]:
 
     # If nothing found, try individual words (e.g. "OAuth" from "OAuth Upgrade")
     if not rows:
-        tokens = [t.lower() for t in clean_query.split() if len(t) > 2 and t.lower() not in ["the", "project", "system", "app"]]
+        tokens = [
+            t.lower()
+            for t in clean_query.split()
+            if len(t) > 2 and t.lower() not in ["the", "project", "system", "app"]
+        ]
         for token in tokens:
             rows = query_graph(cypher, {"name": token})
             if rows:
@@ -110,11 +112,13 @@ def who_owns(project_or_topic: str) -> Dict[str, Any]:
         "previous_owners": previous_owners,
         "has_ownership_history": len(previous_owners) > 0,
         "found": len(rows) > 0,
-        "note": "Ownership verified from Northwind Labs graph registry." if rows else "No owner record found."
+        "note": "Ownership verified from Northwind Labs graph registry."
+        if rows
+        else "No owner record found.",
     }
 
 
-def who_knows_about(topic: str) -> Dict[str, Any]:
+def who_knows_about(topic: str) -> dict[str, Any]:
     """Ranks people with demonstrated evidence of knowing about a topic based on
     a weighted scoring system across architecture docs, decisions, tickets, and chats.
 
@@ -181,7 +185,7 @@ def who_knows_about(topic: str) -> Dict[str, Any]:
         rows = query_graph(fallback_cypher, {"topic": clean_topic})
 
     # Group and calculate weighted scores
-    person_data: Dict[str, Dict[str, Any]] = {}
+    person_data: dict[str, dict[str, Any]] = {}
     for r in rows:
         pid = r["person_id"]
         if pid not in person_data:
@@ -229,26 +233,29 @@ def who_knows_about(topic: str) -> Dict[str, Any]:
     for exp in ranked_experts[:5]:
         total_items = exp["doc_count"] + exp["ticket_count"] + exp["chat_count"]
         confidence = "High" if exp["score"] >= 8.0 else ("Medium" if exp["score"] >= 3.0 else "Low")
-        clean_ranked.append({
-            "person_id": exp["person_id"],
-            "person_name": exp["person_name"],
-            "role": exp["role"],
-            "weighted_score": round(exp["score"], 1),
-            "evidence_count": total_items,
-            "confidence_tier": confidence,
-            "evidence_breakdown": {
-                "architecture_and_decisions": exp["doc_count"],
-                "tickets": exp["ticket_count"],
-                "chat_messages": exp["chat_count"],
-            },
-            "sample_evidence": exp["sample_evidence"],
-        })
+        clean_ranked.append(
+            {
+                "person_id": exp["person_id"],
+                "person_name": exp["person_name"],
+                "role": exp["role"],
+                "weighted_score": round(exp["score"], 1),
+                "evidence_count": total_items,
+                "confidence_tier": confidence,
+                "evidence_breakdown": {
+                    "architecture_and_decisions": exp["doc_count"],
+                    "tickets": exp["ticket_count"],
+                    "chat_messages": exp["chat_count"],
+                },
+                "sample_evidence": exp["sample_evidence"],
+            }
+        )
 
     top_expert = clean_ranked[0]["person_name"] if clean_ranked else "None"
     summary = (
         f"Top expert for '{clean_topic}' is {top_expert} with a weighted evidence score of "
         f"{clean_ranked[0]['weighted_score'] if clean_ranked else 0} pts."
-        if clean_ranked else f"No demonstrated authorship or ticket activity found for '{clean_topic}'."
+        if clean_ranked
+        else f"No demonstrated authorship or ticket activity found for '{clean_topic}'."
     )
 
     return {
@@ -261,7 +268,7 @@ def who_knows_about(topic: str) -> Dict[str, Any]:
     }
 
 
-def trace_decision(topic: str) -> Dict[str, Any]:
+def trace_decision(topic: str) -> dict[str, Any]:
     """Traces the active decision for a topic, previous decisions it replaced,
     and returns full text snippets from the Source nodes for citations.
 
@@ -340,11 +347,11 @@ def trace_decision(topic: str) -> Dict[str, Any]:
         "topic": topic,
         "resolved_topic": resolved_topic,
         "decisions": rows,
-        "found": len(rows) > 0
+        "found": len(rows) > 0,
     }
 
 
-def what_changed_since(date_str: str) -> Dict[str, Any]:
+def what_changed_since(date_str: str) -> dict[str, Any]:
     """Finds all decisions and tickets created or modified after a given date.
 
     Args:
@@ -379,14 +386,10 @@ def what_changed_since(date_str: str) -> Dict[str, Any]:
     ORDER BY timestamp DESC
     """
     rows = query_graph(cypher, {"since_date": date_str})
-    return {
-        "since_date": date_str,
-        "changes": rows,
-        "total_changes": len(rows)
-    }
+    return {"since_date": date_str, "changes": rows, "total_changes": len(rows)}
 
 
-def get_source(source_id: str) -> Dict[str, Any]:
+def get_source(source_id: str) -> dict[str, Any]:
     """Fetches the verbatim source text chunk for a given Source ID to guarantee grounding.
 
     Args:
@@ -406,7 +409,7 @@ def get_source(source_id: str) -> Dict[str, Any]:
     return {"found": False, "source_id": source_id, "error": "Source not found in graph."}
 
 
-def find_related(entity_id_or_name: str, hops: int = 2) -> Dict[str, Any]:
+def find_related(entity_id_or_name: str, hops: int = 2) -> dict[str, Any]:
     """Explores neighboring nodes connected to an entity up to N hops away."""
     hops = max(1, min(hops, 3))  # Clamp between 1 and 3 hops for performance
     cypher = f"""
@@ -420,14 +423,10 @@ def find_related(entity_id_or_name: str, hops: int = 2) -> Dict[str, Any]:
     LIMIT 25
     """
     rows = query_graph(cypher, {"entity": entity_id_or_name})
-    return {
-        "entity": entity_id_or_name,
-        "hops": hops,
-        "neighbors": rows
-    }
+    return {"entity": entity_id_or_name, "hops": hops, "neighbors": rows}
 
 
-def compare_draft_vs_decision(topic: str) -> Dict[str, Any]:
+def compare_draft_vs_decision(topic: str) -> dict[str, Any]:
     """Compares preliminary draft proposals against official ratified decisions for a topic.
     Identifies who authored each, what warnings or trade-offs were raised, and how decisions evolved.
 
@@ -506,20 +505,20 @@ def compare_draft_vs_decision(topic: str) -> Dict[str, Any]:
     if draft and current_decision:
         divergence_summary = (
             f"Draft proposal by {draft.get('author_name', 'Author')} on {draft.get('draft_date', '')} advised: "
-            f"\"{draft.get('recommendation', '')}\". "
+            f'"{draft.get("recommendation", "")}". '
             f"However, ratified policy by {current_decision.get('decider_name', 'Decider')} on "
-            f"{current_decision.get('valid_from', '')} established: \"{current_decision.get('decision_text', '')}\"."
+            f'{current_decision.get("valid_from", "")} established: "{current_decision.get("decision_text", "")}".'
         )
         if superseded_decisions:
-            divergence_summary += (
-                f" Note: Decision was subsequently superseded by {len(superseded_decisions)} historical update(s)."
-            )
+            divergence_summary += f" Note: Decision was subsequently superseded by {len(superseded_decisions)} historical update(s)."
     elif draft and not current_decision:
         divergence_summary = f"Draft recommendation exists by {draft.get('author_name')} but no ratified decision was recorded."
     elif current_decision and not draft:
         divergence_summary = f"Official decision recorded by {current_decision.get('decider_name')}, but no conflicting draft proposal was found in the graph."
     else:
-        divergence_summary = f"No draft recommendations or decisions found for topic '{clean_topic}'."
+        divergence_summary = (
+            f"No draft recommendations or decisions found for topic '{clean_topic}'."
+        )
 
     return {
         "topic": clean_topic,
@@ -537,13 +536,10 @@ def compare_draft_vs_decision(topic: str) -> Dict[str, Any]:
 # WRITE / ACTION TOOLS (Simulated Actions Written Back to Graph)
 # ============================================================================
 
+
 def create_ticket(
-    title: str,
-    description: str,
-    project_id: str,
-    author_id: str = "P_ALICE",
-    confirm: bool = True
-) -> Dict[str, Any]:
+    title: str, description: str, project_id: str, author_id: str = "P_ALICE", confirm: bool = True
+) -> dict[str, Any]:
     """Simulates creating a ticket and writes it back into the graph.
 
     Args:
@@ -564,11 +560,11 @@ def create_ticket(
                 "project_id": project_id,
                 "author_id": author_id,
             },
-            "prompt": f"Proposed Ticket: '{title}' for project '{project_id}'. Pass confirm=True to write to graph."
+            "prompt": f"Proposed Ticket: '{title}' for project '{project_id}'. Pass confirm=True to write to graph.",
         }
 
     graph = get_graph()
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     ticket_id = f"TICK-SIM-{int(datetime.now().timestamp()) % 10000}"
 
     cypher = """
@@ -585,14 +581,17 @@ def create_ticket(
     MERGE (p)-[:AUTHORED {timestamp: $created_at}]->(tk)
     RETURN tk.id AS ticket_id
     """
-    graph.query(cypher, {
-        "id": ticket_id,
-        "title": title,
-        "description": description,
-        "created_at": now_iso,
-        "project_id": project_id,
-        "author_id": author_id,
-    })
+    graph.query(
+        cypher,
+        {
+            "id": ticket_id,
+            "title": title,
+            "description": description,
+            "created_at": now_iso,
+            "project_id": project_id,
+            "author_id": author_id,
+        },
+    )
 
     return {
         "action": "create_ticket",
@@ -601,16 +600,13 @@ def create_ticket(
         "title": title,
         "project_id": project_id,
         "timestamp": now_iso,
-        "note": "Ticket node written to FalkorDB graph with status 'simulated_created'."
+        "note": "Ticket node written to FalkorDB graph with status 'simulated_created'.",
     }
 
 
 def draft_message(
-    channel: str,
-    text: str,
-    author_id: str = "P_ALICE",
-    confirm: bool = True
-) -> Dict[str, Any]:
+    channel: str, text: str, author_id: str = "P_ALICE", confirm: bool = True
+) -> dict[str, Any]:
     """Simulates drafting a message to a team channel and writes it to the graph.
 
     Args:
@@ -629,11 +625,11 @@ def draft_message(
                 "text": text,
                 "author_id": author_id,
             },
-            "prompt": f"Proposed Message to {channel}: '{text[:60]}...'. Pass confirm=True to write to graph."
+            "prompt": f"Proposed Message to {channel}: '{text[:60]}...'. Pass confirm=True to write to graph.",
         }
 
     graph = get_graph()
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     msg_id = f"MSG-SIM-{int(datetime.now().timestamp()) % 10000}"
 
     cypher = """
@@ -649,13 +645,16 @@ def draft_message(
     MERGE (p)-[:AUTHORED {timestamp: $timestamp}]->(m)
     RETURN m.id AS msg_id
     """
-    graph.query(cypher, {
-        "id": msg_id,
-        "channel": channel,
-        "text": text,
-        "timestamp": now_iso,
-        "author_id": author_id,
-    })
+    graph.query(
+        cypher,
+        {
+            "id": msg_id,
+            "channel": channel,
+            "text": text,
+            "timestamp": now_iso,
+            "author_id": author_id,
+        },
+    )
 
     return {
         "action": "draft_message",
@@ -664,16 +663,13 @@ def draft_message(
         "channel": channel,
         "text": text,
         "timestamp": now_iso,
-        "note": "Draft message recorded in graph with status 'simulated_draft'."
+        "note": "Draft message recorded in graph with status 'simulated_draft'.",
     }
 
 
 def assign_task(
-    task_title: str,
-    assignee_person_id: str,
-    project_id: str,
-    confirm: bool = True
-) -> Dict[str, Any]:
+    task_title: str, assignee_person_id: str, project_id: str, confirm: bool = True
+) -> dict[str, Any]:
     """Simulates assigning a task to a person for a project and updates graph relationships.
 
     Args:
@@ -692,7 +688,7 @@ def assign_task(
                 "assignee_id": assignee_person_id,
                 "project_id": project_id,
             },
-            "prompt": f"Proposed Assignment: '{task_title}' to {assignee_person_id}. Pass confirm=True to write to graph."
+            "prompt": f"Proposed Assignment: '{task_title}' to {assignee_person_id}. Pass confirm=True to write to graph.",
         }
 
     graph = get_graph()
@@ -711,14 +707,17 @@ def assign_task(
     CREATE (tk)-[:PART_OF]->(pr)
     RETURN tk.id AS task_id, p.name AS assignee_name
     """
-    now_iso = datetime.now(timezone.utc).isoformat()
-    rows = graph.query(cypher, {
-        "assignee_id": assignee_person_id,
-        "project_id": project_id,
-        "task_id": task_id,
-        "task_title": task_title,
-        "now": now_iso,
-    })
+    now_iso = datetime.now(UTC).isoformat()
+    graph.query(
+        cypher,
+        {
+            "assignee_id": assignee_person_id,
+            "project_id": project_id,
+            "task_id": task_id,
+            "task_title": task_title,
+            "now": now_iso,
+        },
+    )
 
     return {
         "action": "assign_task",
@@ -727,11 +726,11 @@ def assign_task(
         "task_title": task_title,
         "assignee_id": assignee_person_id,
         "project_id": project_id,
-        "note": "Task assigned and connected in knowledge graph."
+        "note": "Task assigned and connected in knowledge graph.",
     }
 
 
-def impact_analysis(topic_or_decision_id: str) -> Dict[str, Any]:
+def impact_analysis(topic_or_decision_id: str) -> dict[str, Any]:
     """Performs multi-hop graph traversal to analyze how a decision impacts the company.
     Finds affected tickets, blocked work items, affected projects, and responsible personnel.
 
@@ -739,6 +738,7 @@ def impact_analysis(topic_or_decision_id: str) -> Dict[str, Any]:
         topic_or_decision_id: Topic name (e.g. 'Paynova') or Decision ID (e.g. 'DEC_PAYMENTS_...').
     """
     from orgmind.freshness import impact_analysis as freshness_impact
+
     return freshness_impact(topic_or_decision_id)
 
 

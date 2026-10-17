@@ -11,22 +11,22 @@ Technical Terms:
   tickets (and blocked tickets), and responsible team members.
 """
 
+import json
 import os
 import sys
-import json
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Union
-from datetime import datetime, timezone
+from typing import Any
 
 project_root = str(Path(__file__).resolve().parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from orgmind.db import query_graph, get_graph
+from orgmind.db import get_graph, query_graph
 from orgmind.resolve import resolver
 
 
-def preview_decision(raw_payload_or_path: Union[str, Path, Dict[str, Any]]) -> Dict[str, Any]:
+def preview_decision(raw_payload_or_path: str | Path | dict[str, Any]) -> dict[str, Any]:
     """Inspects a proposed decision payload against current graph state WITHOUT mutating.
 
     Args:
@@ -46,7 +46,7 @@ def preview_decision(raw_payload_or_path: Union[str, Path, Dict[str, Any]]) -> D
         file_path = str(raw_payload_or_path)
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Decision file not found: {file_path}")
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             data = json.load(f)
     else:
         data = dict(raw_payload_or_path)
@@ -55,13 +55,13 @@ def preview_decision(raw_payload_or_path: Union[str, Path, Dict[str, Any]]) -> D
     topic = data.get("topic", "")
     text = data.get("text", "")
     decided_by = data.get("decided_by")
-    timestamp = data.get("timestamp") or datetime.now(timezone.utc).isoformat()
+    timestamp = data.get("timestamp") or datetime.now(UTC).isoformat()
     src = data.get("source", {})
 
     # Check if already exists in graph (idempotency preview)
     existing_check = query_graph(
         "MATCH (d:Decision {id: $id}) RETURN d.id AS id, d.text AS text, d.status AS status",
-        {"id": new_decision_id}
+        {"id": new_decision_id},
     )
     already_committed = len(existing_check) > 0 and existing_check[0]["text"] == text
 
@@ -85,7 +85,7 @@ def preview_decision(raw_payload_or_path: Union[str, Path, Dict[str, Any]]) -> D
                src.text_snippet AS source_snippet
         LIMIT 1
         """,
-        {"topic": topic, "new_id": new_decision_id or ""}
+        {"topic": topic, "new_id": new_decision_id or ""},
     )
     superseded_candidate = candidate_rows[0] if candidate_rows else None
 
@@ -97,7 +97,7 @@ def preview_decision(raw_payload_or_path: Union[str, Path, Dict[str, Any]]) -> D
         RETURN tk.id AS id, tk.title AS title, tk.status AS status
         LIMIT 5
         """,
-        {"topic": topic}
+        {"topic": topic},
     )
 
     action = "SUPERSEDE" if superseded_candidate else "CREATE"
@@ -134,9 +134,9 @@ def apply_decision(
     source_file: str,
     source_snippet: str,
     chunk_offset: int = 0,
-    decided_by_person_id: Optional[str] = None,
-    timestamp: Optional[str] = None,
-) -> Dict[str, Any]:
+    decided_by_person_id: str | None = None,
+    timestamp: str | None = None,
+) -> dict[str, Any]:
     """Inserts a new decision, attaches its mandatory Source node, and supersedes any existing current decision on the topic.
 
     Integrity rules enforced:
@@ -145,7 +145,7 @@ def apply_decision(
        changed to 'superseded', valid_to set to timestamp, and a [:SUPERSEDES] edge created.
     """
     if timestamp is None:
-        timestamp = datetime.now(timezone.utc).isoformat()
+        timestamp = datetime.now(UTC).isoformat()
 
     graph = get_graph()
 
@@ -229,14 +229,14 @@ def apply_decision(
     }
 
 
-def commit_decision(payload_or_preview_or_path: Union[str, Path, Dict[str, Any]]) -> Dict[str, Any]:
+def commit_decision(payload_or_preview_or_path: str | Path | dict[str, Any]) -> dict[str, Any]:
     """Commits a decision payload to the graph with idempotency checks.
 
     If the decision ID already exists in the graph with the exact same text:
     Returns {"status": "noop_idempotent", ...} and leaves the graph untouched.
     """
     if isinstance(payload_or_preview_or_path, (str, Path)):
-        with open(payload_or_preview_or_path, "r", encoding="utf-8") as f:
+        with open(payload_or_preview_or_path, encoding="utf-8") as f:
             data = json.load(f)
     elif isinstance(payload_or_preview_or_path, dict):
         if "proposed_decision" in payload_or_preview_or_path:
@@ -253,7 +253,7 @@ def commit_decision(payload_or_preview_or_path: Union[str, Path, Dict[str, Any]]
                     "file_path": s.get("file_path"),
                     "snippet": s.get("snippet"),
                     "chunk_offset": s.get("chunk_offset", 0),
-                }
+                },
             }
         else:
             data = payload_or_preview_or_path
@@ -268,7 +268,7 @@ def commit_decision(payload_or_preview_or_path: Union[str, Path, Dict[str, Any]]
     # IDEMPOTENCY CHECK:
     existing = query_graph(
         "MATCH (d:Decision {id: $id}) RETURN d.id AS id, d.text AS text, d.status AS status",
-        {"id": decision_id}
+        {"id": decision_id},
     )
     if existing and existing[0]["text"] == text:
         return {
@@ -291,7 +291,7 @@ def commit_decision(payload_or_preview_or_path: Union[str, Path, Dict[str, Any]]
     )
 
 
-def impact_analysis(topic_or_decision_id: str) -> Dict[str, Any]:
+def impact_analysis(topic_or_decision_id: str) -> dict[str, Any]:
     """Performs multi-hop Cypher traversal to analyze how a decision impacts the company.
 
     Traverses:
@@ -317,7 +317,7 @@ def impact_analysis(topic_or_decision_id: str) -> Dict[str, Any]:
     if clean_target.startswith("DEC_"):
         dec_topic_rows = query_graph(
             "MATCH (d:Decision {id: $id})-[:ABOUT]->(top:Topic) RETURN top.name AS topic",
-            {"id": clean_target}
+            {"id": clean_target},
         )
         if dec_topic_rows:
             topic = dec_topic_rows[0]["topic"]
@@ -344,7 +344,7 @@ def impact_analysis(topic_or_decision_id: str) -> Dict[str, Any]:
                src.file_path AS source_file
         ORDER BY d.valid_from DESC
         """,
-        {"topic": topic}
+        {"topic": topic},
     )
 
     current_decision = next((d for d in decision_rows if d["status"] == "current"), None)
@@ -391,7 +391,7 @@ def impact_analysis(topic_or_decision_id: str) -> Dict[str, Any]:
     blocked_rows = query_graph(blocked_query, {"topic": topic})
 
     # 4. Affected Projects
-    project_map: Dict[str, Dict[str, Any]] = {}
+    project_map: dict[str, dict[str, Any]] = {}
     for t in ticket_rows:
         pid = t.get("project_id")
         if pid and pid not in project_map:
@@ -409,27 +409,27 @@ def impact_analysis(topic_or_decision_id: str) -> Dict[str, Any]:
             OPTIONAL MATCH (lead:Person)-[:WORKS_ON {role: 'Lead'}]->(pr)
             RETURN owner.name AS owner_name, lead.name AS lead_name
             """,
-            {"pid": pid}
+            {"pid": pid},
         )
         if proj_meta:
             project_map[pid]["owner"] = proj_meta[0].get("owner_name")
             project_map[pid]["lead"] = proj_meta[0].get("lead_name")
 
     # 5. Responsible People
-    people_map: Dict[str, Dict[str, Any]] = {}
+    people_map: dict[str, dict[str, Any]] = {}
     # From ticket assignees/authors
     for t in ticket_rows:
         if t.get("assignee_id") and t.get("assignee_name"):
             people_map[t["assignee_id"]] = {
                 "id": t["assignee_id"],
                 "name": t["assignee_name"],
-                "reason": f"Assignee of {t['ticket_id']} ({t['title']})"
+                "reason": f"Assignee of {t['ticket_id']} ({t['title']})",
             }
         elif t.get("author_id") and t.get("author_name"):
             people_map[t["author_id"]] = {
                 "id": t["author_id"],
                 "name": t["author_name"],
-                "reason": f"Author of {t['ticket_id']} ({t['title']})"
+                "reason": f"Author of {t['ticket_id']} ({t['title']})",
             }
 
     # From blocked tickets
@@ -441,7 +441,7 @@ def impact_analysis(topic_or_decision_id: str) -> Dict[str, Any]:
                 people_map[pid] = {
                     "id": pid,
                     "name": assignee,
-                    "reason": f"Responsible for blocked ticket {b['ticket_id']} ({b['title']})"
+                    "reason": f"Responsible for blocked ticket {b['ticket_id']} ({b['title']})",
                 }
 
     # From Decider
@@ -451,11 +451,11 @@ def impact_analysis(topic_or_decision_id: str) -> Dict[str, Any]:
         people_map[d_pid] = {
             "id": d_pid,
             "name": d_name,
-            "reason": f"Decided active policy ({current_decision['id']})"
+            "reason": f"Decided active policy ({current_decision['id']})",
         }
 
     # 6. Build Human-Readable Evidence Paths
-    evidence_paths: List[str] = []
+    evidence_paths: list[str] = []
     if current_decision:
         evidence_paths.append(
             f"Decision[{current_decision['id']}: '{current_decision['text'][:70]}...'] -> ABOUT -> Topic[{topic}]"
@@ -499,7 +499,7 @@ def impact_analysis(topic_or_decision_id: str) -> Dict[str, Any]:
     }
 
 
-def ingest_live_decision(file_path: str = "data/live/new_billing_decision.json") -> Dict[str, Any]:
+def ingest_live_decision(file_path: str = "data/live/new_billing_decision.json") -> dict[str, Any]:
     """Reads a live decision file from /data/live and executes the superseding pipeline.
     Used for Demo Moment C.
     """

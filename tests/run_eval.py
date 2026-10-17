@@ -7,17 +7,20 @@ Technical Terms:
 - Grounding Accuracy: Verifying that cited sources exist in FalkorDB and actually substantiate the claim.
 """
 
+import argparse
+import json
 import os
 import sys
-import json
 import time
-import argparse
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Any
 
 project_root = str(Path(__file__).resolve().parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
+core_pkg = os.path.join(project_root, "packages", "core")
+if core_pkg not in sys.path:
+    sys.path.insert(0, core_pkg)
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -35,12 +38,12 @@ def run_evaluation(
     output_report: str = None,
     limit: int = None,
     verbose: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     if not os.path.exists(test_file):
         print(f"[Error] Test file not found: {test_file}")
         sys.exit(1)
 
-    with open(test_file, "r", encoding="utf-8") as f:
+    with open(test_file, encoding="utf-8") as f:
         tests = json.load(f)
 
     if limit and limit > 0:
@@ -65,7 +68,7 @@ def run_evaluation(
         expected_tool = t.get("expected_tool")
         must_contain = t.get("must_contain", [])
 
-        print(f"[{idx}/{len(tests)}] [{q_id}] ({category}) Q: \"{q}\"", flush=True)
+        print(f'[{idx}/{len(tests)}] [{q_id}] ({category}) Q: "{q}"', flush=True)
         t_start = time.perf_counter()
         agent_res = agent.run(q)
         duration = round(time.perf_counter() - t_start, 2)
@@ -94,7 +97,10 @@ def run_evaluation(
         else:
             status_tag = "[FAIL]"
 
-        print(f"       -> {status_tag} in {duration}s | Tools: {tools_used} | Citations: {valid_citations}", flush=True)
+        print(
+            f"       -> {status_tag} in {duration}s | Tools: {tools_used} | Citations: {valid_citations}",
+            flush=True,
+        )
         if mismatches:
             print(f"          Missing expected keywords: {mismatches}", flush=True)
         if invalid_citations:
@@ -102,21 +108,23 @@ def run_evaluation(
         if verbose:
             print(f"          Full Answer: {answer}\n", flush=True)
 
-        results.append({
-            "id": q_id,
-            "category": category,
-            "question": q,
-            "passed": is_pass,
-            "duration_sec": duration,
-            "expected_tool": expected_tool,
-            "tools_used": tools_used,
-            "tool_matched": tool_match,
-            "missing_keywords": mismatches,
-            "valid_citations": valid_citations,
-            "invalid_citations": invalid_citations,
-            "is_grounded": is_grounded,
-            "answer_preview": answer[:250],
-        })
+        results.append(
+            {
+                "id": q_id,
+                "category": category,
+                "question": q,
+                "passed": is_pass,
+                "duration_sec": duration,
+                "expected_tool": expected_tool,
+                "tools_used": tools_used,
+                "tool_matched": tool_match,
+                "missing_keywords": mismatches,
+                "valid_citations": valid_citations,
+                "invalid_citations": invalid_citations,
+                "is_grounded": is_grounded,
+                "answer_preview": answer[:250],
+            }
+        )
 
     # Summary Statistics
     total_tests = len(tests)
@@ -156,10 +164,24 @@ def run_evaluation(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="OrgMind Model Evaluation Harness")
-    parser.add_argument("--model", type=str, default=None, help="LLM model identifier (e.g. ollama/qwen2.5-coder:14b, gpt-4o)")
-    parser.add_argument("--test-file", type=str, default="tests/test_questions.json", help="Path to test questions JSON")
-    parser.add_argument("--output", type=str, default=None, help="Path to write evaluation report JSON")
-    parser.add_argument("--limit", type=int, default=None, help="Limit number of test questions to run")
+    parser.add_argument(
+        "--model",
+        type=str,
+        default=None,
+        help="LLM model identifier (e.g. ollama/qwen2.5-coder:14b, gpt-4o)",
+    )
+    parser.add_argument(
+        "--test-file",
+        type=str,
+        default="tests/test_questions.json",
+        help="Path to test questions JSON",
+    )
+    parser.add_argument(
+        "--output", type=str, default=None, help="Path to write evaluation report JSON"
+    )
+    parser.add_argument(
+        "--limit", type=int, default=None, help="Limit number of test questions to run"
+    )
     parser.add_argument("--verbose", action="store_true", help="Print verbose answers")
 
     args = parser.parse_args()

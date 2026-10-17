@@ -21,8 +21,8 @@ project_root = str(Path(__file__).resolve().parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from orgmind.resolve import resolver
 from orgmind.ingest_unstructured import extract_from_markdown_llm
+from orgmind.resolve import resolver
 
 
 def parse_date(date_str: str) -> datetime:
@@ -46,7 +46,7 @@ def check_all_data() -> int:
     # 1. Check People
     people_file = "data/people.csv"
     people_count = 0
-    with open(people_file, mode="r", encoding="utf-8") as f:
+    with open(people_file, encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for r in reader:
             people_count += 1
@@ -69,7 +69,9 @@ def check_all_data() -> int:
             if h.get("valid_to"):
                 d_to = parse_date(h["valid_to"])
                 if d_from > d_to:
-                    errors.append(f"Ownership date anomaly in {h['project_id']}: valid_from > valid_to")
+                    errors.append(
+                        f"Ownership date anomaly in {h['project_id']}: valid_from > valid_to"
+                    )
         print(f"[PASS] Checked {len(history_rows)} ownership records.")
 
     # 4. Check Tickets
@@ -77,9 +79,13 @@ def check_all_data() -> int:
     for t in tickets:
         parse_date(t["created_at"])
         if t.get("author_id") and not resolver.get_person_details(t["author_id"]):
-            errors.append(f"Ticket {t['id']} author {t['author_id']} not in master people registry.")
+            errors.append(
+                f"Ticket {t['id']} author {t['author_id']} not in master people registry."
+            )
         if t.get("assignee_id") and not resolver.get_person_details(t["assignee_id"]):
-            errors.append(f"Ticket {t['id']} assignee {t['assignee_id']} not in master people registry.")
+            errors.append(
+                f"Ticket {t['id']} assignee {t['assignee_id']} not in master people registry."
+            )
     print(f"[PASS] Checked {len(tickets)} tickets in tickets.json")
 
     # 5. Check Markdown Docs & Decisions
@@ -99,9 +105,13 @@ def check_all_data() -> int:
             if dec.decided_by_mention:
                 resolved = resolver.resolve_person(dec.decided_by_mention)
                 if not resolved:
-                    errors.append(f"Decider '{dec.decided_by_mention}' in {doc} does not resolve to a Person.")
+                    errors.append(
+                        f"Decider '{dec.decided_by_mention}' in {doc} does not resolve to a Person."
+                    )
 
-    print(f"[PASS] Checked {len(md_files)} markdown documents ({total_decisions} decisions with valid sources).")
+    print(
+        f"[PASS] Checked {len(md_files)} markdown documents ({total_decisions} decisions with valid sources)."
+    )
 
     # 6. Check Chat Messages
     chat_files = glob.glob("data/chats/*.jsonl")
@@ -123,7 +133,9 @@ def check_all_data() -> int:
     if unresolved_handles:
         errors.append(f"Unresolved chat author handles: {unresolved_handles}")
     else:
-        print(f"[PASS] Checked {total_messages} messages across {len(chat_files)} channels (all authors resolved!).")
+        print(
+            f"[PASS] Checked {total_messages} messages across {len(chat_files)} channels (all authors resolved!)."
+        )
 
     # 7. Check Live Drops
     live_files = glob.glob("data/live/*")

@@ -7,24 +7,42 @@ Technical Terms:
 """
 
 import json
-from typing import Any, Dict
+
 try:
     from mcp.server import MCPServer as FastMCP
 except Exception:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server.fastmcp import FastMCP  # type: ignore[attr-defined,no-redef]
+from orgmind.freshness import impact_analysis as tool_impact_analysis
 from orgmind.tools import (
-    who_owns as tool_who_owns,
-    who_knows_about as tool_who_knows_about,
-    trace_decision as tool_trace_decision,
-    what_changed_since as tool_what_changed_since,
-    get_source as tool_get_source,
-    find_related as tool_find_related,
-    create_ticket as tool_create_ticket,
-    draft_message as tool_draft_message,
     assign_task as tool_assign_task,
+)
+from orgmind.tools import (
     compare_draft_vs_decision as tool_compare_draft_vs_decision,
 )
-from orgmind.freshness import impact_analysis as tool_impact_analysis
+from orgmind.tools import (
+    create_ticket as tool_create_ticket,
+)
+from orgmind.tools import (
+    draft_message as tool_draft_message,
+)
+from orgmind.tools import (
+    find_related as tool_find_related,
+)
+from orgmind.tools import (
+    get_source as tool_get_source,
+)
+from orgmind.tools import (
+    trace_decision as tool_trace_decision,
+)
+from orgmind.tools import (
+    what_changed_since as tool_what_changed_since,
+)
+from orgmind.tools import (
+    who_knows_about as tool_who_knows_about,
+)
+from orgmind.tools import (
+    who_owns as tool_who_owns,
+)
 
 # Initialize FastMCP Server
 mcp = FastMCP("OrgMind-Company-Brain")
@@ -147,7 +165,9 @@ def draft_message(channel: str, text: str, confirm: bool = True) -> str:
 
 
 @mcp.tool()
-def assign_task(task_title: str, assignee_person_id: str, project_id: str, confirm: bool = True) -> str:
+def assign_task(
+    task_title: str, assignee_person_id: str, project_id: str, confirm: bool = True
+) -> str:
     """Assigns a project task to a team member in the graph.
 
     Args:
@@ -163,4 +183,3 @@ def assign_task(task_title: str, assignee_person_id: str, project_id: str, confi
 if __name__ == "__main__":
     # Runs the MCP server over stdio for Claude Desktop or client connection
     mcp.run()
-

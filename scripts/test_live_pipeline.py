@@ -10,19 +10,22 @@ Verifies:
 6. Entity resolution hardening: handles with typos and unknown flags.
 """
 
-import sys
 import os
+import sys
 from pathlib import Path
-import json
 
 project_root = str(Path(__file__).resolve().parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
+core_pkg = os.path.join(project_root, "packages", "core")
+if core_pkg not in sys.path:
+    sys.path.insert(0, core_pkg)
 
 from orgmind.db import query_graph
+from orgmind.freshness import commit_decision, impact_analysis, preview_decision
 from orgmind.resolve import resolver
-from orgmind.freshness import preview_decision, commit_decision, impact_analysis
 from orgmind.tools import trace_decision
+
 from scripts.reset_demo import reset_northwind_graph
 
 
@@ -41,15 +44,25 @@ def run_pipeline_test() -> bool:
     # Step 1: Entity Resolver fuzzy & unknown handle checks
     print("\n[Step 1] Testing EntityResolver hardening...")
     res_exact = resolver.resolve_with_status("@alice")
-    assert res_exact["status"] == "exact" and res_exact["resolved_id"] == "P_ALICE", f"Failed exact: {res_exact}"
+    assert res_exact["status"] == "exact" and res_exact["resolved_id"] == "P_ALICE", (
+        f"Failed exact: {res_exact}"
+    )
 
     res_fuzzy = resolver.resolve_with_status("Ailce Chen")
-    assert res_fuzzy["status"] == "fuzzy" and res_fuzzy["resolved_id"] == "P_ALICE", f"Failed fuzzy: {res_fuzzy}"
+    assert res_fuzzy["status"] == "fuzzy" and res_fuzzy["resolved_id"] == "P_ALICE", (
+        f"Failed fuzzy: {res_fuzzy}"
+    )
 
     res_unknown = resolver.resolve_with_status("ghost_contractor_xyz")
-    assert res_unknown["status"] == "unknown" and res_unknown["flag_for_review"] is True, f"Failed unknown: {res_unknown}"
-    assert len(resolver.get_flagged_unknowns()) >= 1, "Expected flagged unknown in resolver review list."
-    print(" -> PASS: Exact resolution, fuzzy typo correction, and unknown handle flagging verified.")
+    assert res_unknown["status"] == "unknown" and res_unknown["flag_for_review"] is True, (
+        f"Failed unknown: {res_unknown}"
+    )
+    assert len(resolver.get_flagged_unknowns()) >= 1, (
+        "Expected flagged unknown in resolver review list."
+    )
+    print(
+        " -> PASS: Exact resolution, fuzzy typo correction, and unknown handle flagging verified."
+    )
 
     # Step 2: Extraction Preview
     live_file = "data/live/live_decision_reversal.json"
@@ -59,10 +72,16 @@ def run_pipeline_test() -> bool:
     print(f"   Status: {preview['status']}")
     print(f"   Action: {preview['action']}")
     print(f"   Proposed Decision: {preview['proposed_decision']['id']}")
-    print(f"   Superseded Candidate: {preview['superseded_decision_candidate']['id'] if preview['superseded_decision_candidate'] else None}")
+    print(
+        f"   Superseded Candidate: {preview['superseded_decision_candidate']['id'] if preview['superseded_decision_candidate'] else None}"
+    )
 
-    assert preview["status"] == "ready", f"Preview status should be 'ready', got {preview['status']}"
-    assert preview["action"] == "SUPERSEDE", f"Preview action should be 'SUPERSEDE', got {preview['action']}"
+    assert preview["status"] == "ready", (
+        f"Preview status should be 'ready', got {preview['status']}"
+    )
+    assert preview["action"] == "SUPERSEDE", (
+        f"Preview action should be 'SUPERSEDE', got {preview['action']}"
+    )
     assert preview["superseded_decision_candidate"] is not None, "Candidate should not be None."
     assert preview["superseded_decision_candidate"]["id"] == "DEC_PAYMENTS_2026_03_PAYNOVA", (
         f"Expected to supersede DEC_PAYMENTS_2026_03_PAYNOVA, got {preview['superseded_decision_candidate']['id']}"
@@ -70,7 +89,9 @@ def run_pipeline_test() -> bool:
 
     # Verify preview did NOT mutate the database
     mid_nodes = query_graph("MATCH (n) RETURN count(n) AS cnt")[0]["cnt"]
-    assert mid_nodes == initial_nodes, f"Preview modified database! Initial: {initial_nodes}, Now: {mid_nodes}"
+    assert mid_nodes == initial_nodes, (
+        f"Preview modified database! Initial: {initial_nodes}, Now: {mid_nodes}"
+    )
     print(" -> PASS: Preview accurately detected superseding target without database mutation.")
 
     # Step 3: Decision Commit
@@ -89,10 +110,14 @@ def run_pipeline_test() -> bool:
     print(f" Found {len(trace['decisions'])} decision entries.")
     active_d = next((d for d in trace["decisions"] if d["status"] == "current"), None)
     assert active_d is not None, "No active decision found for Paynova!"
-    assert active_d["decision_id"] == "DEC_PAYMENTS_2026_05_REVERSAL", f"Active decision mismatch: {active_d['decision_id']}"
+    assert active_d["decision_id"] == "DEC_PAYMENTS_2026_05_REVERSAL", (
+        f"Active decision mismatch: {active_d['decision_id']}"
+    )
     assert "INC-409" in active_d["decision_text"] or "Stripe" in active_d["decision_text"]
     assert active_d["superseded_decision_id"] == "DEC_PAYMENTS_2026_03_PAYNOVA"
-    print(" -> PASS: Graph provenance trace confirms new reversal active and old decision superseded.")
+    print(
+        " -> PASS: Graph provenance trace confirms new reversal active and old decision superseded."
+    )
 
     # Step 5: Multi-hop Impact Analysis
     print("\n[Step 5] Testing impact_analysis('Paynova')...")
@@ -110,8 +135,12 @@ def run_pipeline_test() -> bool:
     assert "TICK-202" in blocked_ids, "TICK-202 must be marked as blocked"
 
     people_names = [p["name"] for p in impact["responsible_people"]]
-    assert any("Rohan" in name for name in people_names), "Rohan Iyer should be identified as responsible"
-    assert any("Neha" in name or "Priya" in name for name in people_names), "Neha or Priya should be identified"
+    assert any("Rohan" in name for name in people_names), (
+        "Rohan Iyer should be identified as responsible"
+    )
+    assert any("Neha" in name or "Priya" in name for name in people_names), (
+        "Neha or Priya should be identified"
+    )
     assert len(impact["evidence_paths"]) > 0, "Evidence paths must not be empty"
     print(" -> PASS: Multi-hop impact analysis surfaced tickets, blockers, projects, and people.")
 
@@ -128,15 +157,23 @@ def run_pipeline_test() -> bool:
 
     retest_nodes = query_graph("MATCH (n) RETURN count(n) AS cnt")[0]["cnt"]
     retest_edges = query_graph("MATCH ()-[r]->() RETURN count(r) AS cnt")[0]["cnt"]
-    assert retest_nodes == post_commit_nodes, f"Node count changed on idempotent commit! {post_commit_nodes} -> {retest_nodes}"
-    assert retest_edges == post_commit_edges, f"Edge count changed on idempotent commit! {post_commit_edges} -> {retest_edges}"
-    print(f" -> PASS: Idempotent re-commit verified (Node count preserved at {retest_nodes}, edges at {retest_edges}).")
+    assert retest_nodes == post_commit_nodes, (
+        f"Node count changed on idempotent commit! {post_commit_nodes} -> {retest_nodes}"
+    )
+    assert retest_edges == post_commit_edges, (
+        f"Edge count changed on idempotent commit! {post_commit_edges} -> {retest_edges}"
+    )
+    print(
+        f" -> PASS: Idempotent re-commit verified (Node count preserved at {retest_nodes}, edges at {retest_edges})."
+    )
 
     # Step 7: Teardown / Return to Clean State
     print("\n[Step 7] Cleaning up: resetting graph to pristine baseline...")
     reset_northwind_graph()
     final_nodes = query_graph("MATCH (n) RETURN count(n) AS cnt")[0]["cnt"]
-    assert final_nodes == initial_nodes, f"Tear-down failed: initial {initial_nodes}, now {final_nodes}"
+    assert final_nodes == initial_nodes, (
+        f"Tear-down failed: initial {initial_nodes}, now {final_nodes}"
+    )
     print(" -> PASS: Baseline restored for Demo Moments A-D.")
 
     print("\n" + "=" * 60)

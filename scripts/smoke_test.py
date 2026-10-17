@@ -8,17 +8,20 @@ Checks:
 4. Tools execute and return structured data
 """
 
-import sys
 import os
+import sys
 from pathlib import Path
 
-# Add project root to sys.path
+# Add project root and packages/core to sys.path
 project_root = str(Path(__file__).resolve().parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
+core_pkg = os.path.join(project_root, "packages", "core")
+if core_pkg not in sys.path:
+    sys.path.insert(0, core_pkg)
 
 from orgmind.db import get_graph, query_graph
-from orgmind.tools import who_owns, who_knows_about, trace_decision, what_changed_since
+from orgmind.tools import trace_decision, who_knows_about, who_owns
 
 
 def run_smoke_test() -> int:
@@ -54,11 +57,26 @@ def run_smoke_test() -> int:
     # 3. Core Cypher Queries
     print("\n--- Verifying 5 Core Cypher Queries ---")
     queries = [
-        ("Query 1: Who Owns", "MATCH (owner)-[:OWNS]->(target) RETURN labels(target)[0], target.name, owner.name LIMIT 3"),
-        ("Query 2: Who Knows About", "MATCH (p:Person)-[:AUTHORED]->(item)-[:MENTIONS|ABOUT]->(top:Topic) RETURN p.name, top.name, count(item) AS cnt LIMIT 3"),
-        ("Query 3: Decision Trace", "MATCH (d:Decision)-[:ABOUT]->(top:Topic) OPTIONAL MATCH (d)-[:DERIVED_FROM]->(src:Source) RETURN d.id, d.text, d.status, src.id LIMIT 3"),
-        ("Query 4: Supersedes Linkage", "MATCH (d:Decision) OPTIONAL MATCH (d)-[:SUPERSEDES]->(old:Decision) RETURN d.id, d.status, old.id LIMIT 3"),
-        ("Query 5: What Changed", "MATCH (d:Decision) RETURN 'Decision' AS type, d.id AS id, d.valid_from AS ts LIMIT 3"),
+        (
+            "Query 1: Who Owns",
+            "MATCH (owner)-[:OWNS]->(target) RETURN labels(target)[0], target.name, owner.name LIMIT 3",
+        ),
+        (
+            "Query 2: Who Knows About",
+            "MATCH (p:Person)-[:AUTHORED]->(item)-[:MENTIONS|ABOUT]->(top:Topic) RETURN p.name, top.name, count(item) AS cnt LIMIT 3",
+        ),
+        (
+            "Query 3: Decision Trace",
+            "MATCH (d:Decision)-[:ABOUT]->(top:Topic) OPTIONAL MATCH (d)-[:DERIVED_FROM]->(src:Source) RETURN d.id, d.text, d.status, src.id LIMIT 3",
+        ),
+        (
+            "Query 4: Supersedes Linkage",
+            "MATCH (d:Decision) OPTIONAL MATCH (d)-[:SUPERSEDES]->(old:Decision) RETURN d.id, d.status, old.id LIMIT 3",
+        ),
+        (
+            "Query 5: What Changed",
+            "MATCH (d:Decision) RETURN 'Decision' AS type, d.id AS id, d.valid_from AS ts LIMIT 3",
+        ),
     ]
 
     for name, cypher in queries:
@@ -78,11 +96,15 @@ def run_smoke_test() -> int:
 
         knows = who_knows_about("Paynova")
         assert len(knows["ranked_experts"]) > 0, "who_knows_about('Paynova') expected experts"
-        print(f"[PASS] Tool who_knows_about('Paynova') verified -> Top expert: {knows['ranked_experts'][0]['person_name']}")
+        print(
+            f"[PASS] Tool who_knows_about('Paynova') verified -> Top expert: {knows['ranked_experts'][0]['person_name']}"
+        )
 
         trace = trace_decision("OAuth")
         assert trace["found"] is True, "trace_decision('OAuth') expected found=True"
-        print(f"[PASS] Tool trace_decision('OAuth') verified -> Decision: {trace['decisions'][0]['decision_id']}")
+        print(
+            f"[PASS] Tool trace_decision('OAuth') verified -> Decision: {trace['decisions'][0]['decision_id']}"
+        )
     except Exception as exc:
         print(f"[FAIL] Tool verification error: {exc}")
         return 4

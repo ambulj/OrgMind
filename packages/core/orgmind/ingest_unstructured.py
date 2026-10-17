@@ -13,7 +13,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
 
 project_root = str(Path(__file__).resolve().parent.parent)
@@ -21,8 +21,8 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from orgmind.db import get_graph
-from orgmind.resolve import resolver
 from orgmind.freshness import apply_decision
+from orgmind.resolve import resolver
 
 
 # Pydantic models for structured output validation
@@ -37,7 +37,7 @@ class ExtractedDecision(BaseModel):
     decision_id: str
     topic: str
     text: str
-    decided_by_mention: Optional[str] = None
+    decided_by_mention: str | None = None
     date: str
     source: ExtractedSource
 
@@ -46,16 +46,16 @@ class ExtractedDraft(BaseModel):
     draft_id: str
     topic: str
     recommendation: str
-    author_mention: Optional[str] = None
+    author_mention: str | None = None
     date: str
     source: ExtractedSource
 
 
 class ExtractedExtractionResult(BaseModel):
-    decisions: List[ExtractedDecision] = Field(default_factory=list)
-    drafts: List[ExtractedDraft] = Field(default_factory=list)
-    people_mentions: List[str] = Field(default_factory=list)
-    topics: List[str] = Field(default_factory=list)
+    decisions: list[ExtractedDecision] = Field(default_factory=list)
+    drafts: list[ExtractedDraft] = Field(default_factory=list)
+    people_mentions: list[str] = Field(default_factory=list)
+    topics: list[str] = Field(default_factory=list)
 
 
 def extract_from_markdown_llm(file_path: str, content: str) -> ExtractedExtractionResult:
@@ -292,7 +292,7 @@ def ingest_markdown_docs(docs_dir: str = "data/docs") -> None:
     md_files = glob.glob(os.path.join(docs_dir, "*.md"))
 
     for file_path in md_files:
-        with open(file_path, mode="r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             content = f.read()
 
         doc_id = f"DOC_{os.path.basename(file_path).split('.')[0].upper()}"
@@ -306,7 +306,9 @@ def ingest_markdown_docs(docs_dir: str = "data/docs") -> None:
 
         # Ingest decisions with mandatory Source and superseding check
         for dec in extracted.decisions:
-            decider_id = resolver.resolve_person(dec.decided_by_mention) if dec.decided_by_mention else None
+            decider_id = (
+                resolver.resolve_person(dec.decided_by_mention) if dec.decided_by_mention else None
+            )
             apply_decision(
                 decision_id=dec.decision_id,
                 topic=dec.topic,
@@ -321,7 +323,9 @@ def ingest_markdown_docs(docs_dir: str = "data/docs") -> None:
 
         # Ingest draft recommendations
         for draft in extracted.drafts:
-            author_id = resolver.resolve_person(draft.author_mention) if draft.author_mention else None
+            author_id = (
+                resolver.resolve_person(draft.author_mention) if draft.author_mention else None
+            )
             draft_cypher = """
             MERGE (src:Source {id: $source_id})
             ON CREATE SET src.file_path = $source_file,
@@ -337,21 +341,24 @@ def ingest_markdown_docs(docs_dir: str = "data/docs") -> None:
             MATCH (doc:Document {id: $doc_id})
             MERGE (doc)-[:CONTAINS_DRAFT]->(dr)
             """
-            graph.query(draft_cypher, {
-                "source_id": draft.source.source_id,
-                "source_file": draft.source.file_path,
-                "chunk_offset": draft.source.chunk_offset,
-                "snippet": draft.source.snippet,
-                "date": draft.date,
-                "draft_id": draft.draft_id,
-                "topic": draft.topic,
-                "recommendation": draft.recommendation,
-                "doc_id": doc_id,
-            })
+            graph.query(
+                draft_cypher,
+                {
+                    "source_id": draft.source.source_id,
+                    "source_file": draft.source.file_path,
+                    "chunk_offset": draft.source.chunk_offset,
+                    "snippet": draft.source.snippet,
+                    "date": draft.date,
+                    "draft_id": draft.draft_id,
+                    "topic": draft.topic,
+                    "recommendation": draft.recommendation,
+                    "doc_id": doc_id,
+                },
+            )
             if author_id:
                 graph.query(
                     "MATCH (dr:DraftRecommendation {id: $draft_id}), (p:Person {id: $author_id}) MERGE (p)-[:AUTHORED]->(dr)",
-                    {"draft_id": draft.draft_id, "author_id": author_id}
+                    {"draft_id": draft.draft_id, "author_id": author_id},
                 )
 
         # Ingest topic mentions
@@ -374,7 +381,7 @@ def ingest_chat_messages(chats_dir: str = "data/chats") -> None:
     jsonl_files = glob.glob(os.path.join(chats_dir, "*.jsonl"))
 
     for file_path in jsonl_files:
-        with open(file_path, mode="r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             for line in f:
                 if not line.strip():
                     continue
@@ -403,7 +410,9 @@ def ingest_chat_messages(chats_dir: str = "data/chats") -> None:
                     MATCH (p:Person {id: $author_id})
                     MERGE (p)-[:AUTHORED {timestamp: $timestamp}]->(m)
                     """
-                    graph.query(link_author, {"id": msg["id"], "author_id": author_id, "timestamp": ts})
+                    graph.query(
+                        link_author, {"id": msg["id"], "author_id": author_id, "timestamp": ts}
+                    )
 
                 # Simple topic detection in chat for who-knows evidence
                 text_lower = msg.get("text", "").lower()

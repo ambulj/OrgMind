@@ -1,0 +1,71 @@
+name: OrgMind CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  quality-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      falkordb:
+        image: falkordb/falkordb:latest
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 2s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Monorepo Core Package & Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e packages/core
+          pip install ruff mypy pytest pytest-asyncio streamlit pyvis
+
+      - name: Run Ruff Linter
+        run: |
+          ruff check packages/core apps scripts tests
+
+      - name: Run Mypy Type Checker
+        run: |
+          mypy packages/core --ignore-missing-imports
+
+      - name: Seed Baseline Graph Data
+        env:
+          FALKORDB_HOST: localhost
+          FALKORDB_PORT: 6379
+          FALKORDB_GRAPH_NAME: northwind_labs
+        run: |
+          python packages/core/orgmind/ingest_structured.py
+          python packages/core/orgmind/ingest_unstructured.py
+
+      - name: Run Unit Tests
+        env:
+          FALKORDB_HOST: localhost
+          FALKORDB_PORT: 6379
+          FALKORDB_GRAPH_NAME: northwind_labs
+        run: |
+          pytest tests/ -v
+
+      - name: Run Smoke Test
+        env:
+          FALKORDB_HOST: localhost
+          FALKORDB_PORT: 6379
+          FALKORDB_GRAPH_NAME: northwind_labs
+        run: |
+          python scripts/smoke_test.py

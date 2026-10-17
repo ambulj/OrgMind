@@ -12,16 +12,18 @@ Subsystems Checked:
 6. Demo Assets & Live Pipeline Files
 """
 
-import sys
-import os
-import json
-import urllib.request
 import asyncio
+import os
+import sys
+import urllib.request
 from pathlib import Path
 
 project_root = str(Path(__file__).resolve().parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
+core_pkg = os.path.join(project_root, "packages", "core")
+if core_pkg not in sys.path:
+    sys.path.insert(0, core_pkg)
 
 # Ensure UTF-8 stdout encoding on Windows
 if hasattr(sys.stdout, "reconfigure"):
@@ -36,6 +38,7 @@ def check_falkordb() -> bool:
     print("[1/6] Checking FalkorDB Connectivity & Graph Integrity...", end=" ", flush=True)
     try:
         from orgmind.db import get_graph
+
         g = get_graph()
         node_res = g.query("MATCH (n) RETURN count(n) AS cnt").result_set
         edge_res = g.query("MATCH ()-[r]->() RETURN count(r) AS cnt").result_set
@@ -73,6 +76,7 @@ def check_mcp_server() -> bool:
     print("[3/6] Checking FastMCP Tool Registration...", end=" ", flush=True)
     try:
         from orgmind.mcp_server import mcp
+
         tools = asyncio.run(mcp.list_tools())
         if len(tools) >= 11:
             print(f"PASS ({len(tools)} tools registered)")
@@ -90,9 +94,9 @@ def check_demo_assets() -> bool:
     required_files = [
         "data/live/live_decision_reversal.json",
         "data/live/new_billing_decision.json",
-        "DEMO_PLAN.md",
+        "docs/DEMO_PLAN.md",
         "STATUS.md",
-        "app/streamlit_app.py",
+        "apps/legacy-streamlit/streamlit_app.py",
         "tests/test_questions.json",
     ]
     missing = [f for f in required_files if not os.path.exists(os.path.join(project_root, f))]
@@ -108,6 +112,7 @@ def check_live_pipeline() -> bool:
     print("[5/6] Testing Live-Update Preview Pipeline...", end=" ", flush=True)
     try:
         from orgmind.freshness import preview_decision
+
         prev = preview_decision("data/live/live_decision_reversal.json")
         if prev.get("status") in ("ready", "already_committed"):
             print(f"PASS (Preview verified - status: {prev.get('status')})")
@@ -124,6 +129,7 @@ def check_llm_model() -> bool:
     print("[6/6] Checking LLM Agent & Reasoning Loop...", end=" ", flush=True)
     try:
         from orgmind.agent import OrgMindAgent
+
         agent = OrgMindAgent()
         res = agent.run("Who owns OAuth?")
         ans = res.get("answer", "")

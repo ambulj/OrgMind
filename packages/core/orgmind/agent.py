@@ -10,36 +10,38 @@ Technical Terms:
 
 import json
 import os
-import sys
 import re
+import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 project_root = str(Path(__file__).resolve().parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 # Prevent LiteLLM from making slow network calls to fetch remote cost maps
 os.environ["LITELLM_LOCAL_MODEL_COST_MAP"] = "True"
 
 import litellm
+
 litellm.suppress_debug_info = True
-from orgmind.tools import TOOLS_REGISTRY
 from orgmind.db import query_graph
+from orgmind.tools import TOOLS_REGISTRY
 
 
-def extract_citations(text: str) -> List[str]:
+def extract_citations(text: str) -> list[str]:
     """Extracts all Source IDs referenced like [Source: SRC_...] or [source: SRC_...] or [SRC_...]"""
-    pattern = r'\[(?:Source:?\s*)?([A-Za-z0-9_\-]+)\]'
+    pattern = r"\[(?:Source:?\s*)?([A-Za-z0-9_\-]+)\]"
     matches = re.findall(pattern, text, re.IGNORECASE)
     # Only keep IDs that look like source IDs (SRC_...)
     return list(dict.fromkeys([m for m in matches if m.upper().startswith("SRC_")]))
 
 
-def validate_citations_against_graph(cited_ids: List[str]) -> Dict[str, Any]:
+def validate_citations_against_graph(cited_ids: list[str]) -> dict[str, Any]:
     """Checks whether the cited source IDs actually exist in the FalkorDB graph."""
     if not cited_ids:
         return {"valid": [], "invalid": []}
@@ -82,12 +84,12 @@ AGENT_TOOLS_SCHEMA = [
                 "properties": {
                     "project_or_topic": {
                         "type": "string",
-                        "description": "The name of the project or topic, e.g. 'OAuth' or 'Billing'."
+                        "description": "The name of the project or topic, e.g. 'OAuth' or 'Billing'.",
                     }
                 },
-                "required": ["project_or_topic"]
-            }
-        }
+                "required": ["project_or_topic"],
+            },
+        },
     },
     {
         "type": "function",
@@ -99,12 +101,12 @@ AGENT_TOOLS_SCHEMA = [
                 "properties": {
                     "topic": {
                         "type": "string",
-                        "description": "Topic keyword, e.g. 'OAuth', 'Kubernetes', 'Billing'."
+                        "description": "Topic keyword, e.g. 'OAuth', 'Kubernetes', 'Billing'.",
                     }
                 },
-                "required": ["topic"]
-            }
-        }
+                "required": ["topic"],
+            },
+        },
     },
     {
         "type": "function",
@@ -116,12 +118,12 @@ AGENT_TOOLS_SCHEMA = [
                 "properties": {
                     "topic": {
                         "type": "string",
-                        "description": "Topic to trace decisions for, e.g. 'OAuth', 'Billing'."
+                        "description": "Topic to trace decisions for, e.g. 'OAuth', 'Billing'.",
                     }
                 },
-                "required": ["topic"]
-            }
-        }
+                "required": ["topic"],
+            },
+        },
     },
     {
         "type": "function",
@@ -133,12 +135,12 @@ AGENT_TOOLS_SCHEMA = [
                 "properties": {
                     "topic": {
                         "type": "string",
-                        "description": "Topic or technology to compare (e.g. 'Paynova', 'Billing', 'OAuth')."
+                        "description": "Topic or technology to compare (e.g. 'Paynova', 'Billing', 'OAuth').",
                     }
                 },
-                "required": ["topic"]
-            }
-        }
+                "required": ["topic"],
+            },
+        },
     },
     {
         "type": "function",
@@ -150,12 +152,12 @@ AGENT_TOOLS_SCHEMA = [
                 "properties": {
                     "date_str": {
                         "type": "string",
-                        "description": "Date formatted as YYYY-MM-DD, e.g. '2026-02-01'."
+                        "description": "Date formatted as YYYY-MM-DD, e.g. '2026-02-01'.",
                     }
                 },
-                "required": ["date_str"]
-            }
-        }
+                "required": ["date_str"],
+            },
+        },
     },
     {
         "type": "function",
@@ -167,12 +169,12 @@ AGENT_TOOLS_SCHEMA = [
                 "properties": {
                     "source_id": {
                         "type": "string",
-                        "description": "Unique source identifier, e.g. 'SRC_DOC_AUTH_01'."
+                        "description": "Unique source identifier, e.g. 'SRC_DOC_AUTH_01'.",
                     }
                 },
-                "required": ["source_id"]
-            }
-        }
+                "required": ["source_id"],
+            },
+        },
     },
     {
         "type": "function",
@@ -184,12 +186,12 @@ AGENT_TOOLS_SCHEMA = [
                 "properties": {
                     "topic_or_decision_id": {
                         "type": "string",
-                        "description": "Topic name (e.g. 'Paynova') or Decision ID (e.g. 'DEC_PAYMENTS_...')."
+                        "description": "Topic name (e.g. 'Paynova') or Decision ID (e.g. 'DEC_PAYMENTS_...').",
                     }
                 },
-                "required": ["topic_or_decision_id"]
-            }
-        }
+                "required": ["topic_or_decision_id"],
+            },
+        },
     },
     {
         "type": "function",
@@ -201,11 +203,14 @@ AGENT_TOOLS_SCHEMA = [
                 "properties": {
                     "title": {"type": "string", "description": "Title of the ticket"},
                     "description": {"type": "string", "description": "Detailed description"},
-                    "project_id": {"type": "string", "description": "Target project ID, e.g. 'PRJ_OAUTH_UPGRADE'"}
+                    "project_id": {
+                        "type": "string",
+                        "description": "Target project ID, e.g. 'PRJ_OAUTH_UPGRADE'",
+                    },
                 },
-                "required": ["title", "description", "project_id"]
-            }
-        }
+                "required": ["title", "description", "project_id"],
+            },
+        },
     },
     {
         "type": "function",
@@ -215,23 +220,26 @@ AGENT_TOOLS_SCHEMA = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "channel": {"type": "string", "description": "Channel name, e.g. '#backend-eng'"},
-                    "text": {"type": "string", "description": "Message content"}
+                    "channel": {
+                        "type": "string",
+                        "description": "Channel name, e.g. '#backend-eng'",
+                    },
+                    "text": {"type": "string", "description": "Message content"},
                 },
-                "required": ["channel", "text"]
-            }
-        }
-    }
+                "required": ["channel", "text"],
+            },
+        },
+    },
 ]
 
 
 class OrgMindAgent:
     """Agent coordinator managing conversation history, LLM calls via LiteLLM, and tool executions."""
 
-    def __init__(self, model: Optional[str] = None):
+    def __init__(self, model: str | None = None):
         self.model = model or os.getenv("LLM_MODEL", "gpt-4o")
 
-    def run(self, user_query: str, history: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+    def run(self, user_query: str, history: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         """Runs the tool-calling loop until the agent produces a final cited response.
 
         Returns:
@@ -240,15 +248,15 @@ class OrgMindAgent:
             - 'sources_used': List of Source IDs or source dicts retrieved
             - 'tool_calls': Trace of tools called during the turn
         """
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        messages: list[dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
         if history:
             messages.extend(history)
         messages.append({"role": "user", "content": user_query})
 
-        tool_calls_executed = []
-        tool_results_recorded = []
-        sources_collected = []
-        executed_signatures = set()
+        tool_calls_executed: list[dict[str, Any]] = []
+        tool_results_recorded: list[dict[str, Any]] = []
+        sources_collected: list[dict[str, Any]] = []
+        executed_signatures: set = set()
 
         # ReAct loop (up to 4 steps)
         for _ in range(4):
@@ -288,8 +296,12 @@ class OrgMindAgent:
                             messages=messages,
                             temperature=0.0,
                         )
-                        raw_ans = final_res.choices[0].message.content or "Completed tool investigation."
-                        processed = self._post_process_answer(raw_ans, sources_collected, tool_results_recorded)
+                        raw_ans = (
+                            final_res.choices[0].message.content or "Completed tool investigation."
+                        )
+                        processed = self._post_process_answer(
+                            raw_ans, sources_collected, tool_results_recorded
+                        )
                         return {
                             "answer": processed["answer"],
                             "sources_used": sources_collected,
@@ -306,11 +318,16 @@ class OrgMindAgent:
                 elif hasattr(msg, "dict"):
                     messages.append(msg.dict())
                 else:
-                    messages.append({
-                        "role": "assistant",
-                        "content": msg.content or "",
-                        "tool_calls": [c.model_dump() if hasattr(c, "model_dump") else c for c in msg.tool_calls]
-                    })
+                    messages.append(
+                        {
+                            "role": "assistant",
+                            "content": msg.content or "",
+                            "tool_calls": [
+                                c.model_dump() if hasattr(c, "model_dump") else c
+                                for c in msg.tool_calls
+                            ],
+                        }
+                    )
 
                 for call in new_calls:
                     fn_name = call.function.name
@@ -320,7 +337,7 @@ class OrgMindAgent:
 
                     # Execute local tool
                     if fn_name in TOOLS_REGISTRY:
-                        tool_fn = TOOLS_REGISTRY[fn_name]
+                        tool_fn: Any = TOOLS_REGISTRY[fn_name]
                         result = tool_fn(**args)
                     else:
                         result = {"error": f"Tool '{fn_name}' not recognized."}
@@ -331,16 +348,20 @@ class OrgMindAgent:
                     self._collect_sources(result, sources_collected)
 
                     # Append tool result to conversation
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": getattr(call, "id", f"call_{len(tool_calls_executed)}"),
-                        "name": fn_name,
-                        "content": json.dumps(result)
-                    })
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": getattr(call, "id", f"call_{len(tool_calls_executed)}"),
+                            "name": fn_name,
+                            "content": json.dumps(result),
+                        }
+                    )
             else:
                 # No more tools called; final answer reached
                 raw_ans = msg.content or "No response generated."
-                processed = self._post_process_answer(raw_ans, sources_collected, tool_results_recorded)
+                processed = self._post_process_answer(
+                    raw_ans, sources_collected, tool_results_recorded
+                )
                 return {
                     "answer": processed["answer"],
                     "sources_used": sources_collected,
@@ -369,23 +390,29 @@ class OrgMindAgent:
             "grounded": processed["grounded"],
         }
 
-    def _collect_sources(self, tool_result: Any, sources_list: List[Dict[str, Any]]) -> None:
+    def _collect_sources(self, tool_result: Any, sources_list: list[dict[str, Any]]) -> None:
         """Helper to recursively scan tool results for Source IDs and snippets."""
         if isinstance(tool_result, dict):
             sid = tool_result.get("source_id")
             if sid and not any(s.get("source_id") == sid for s in sources_list):
-                sources_list.append({
-                    "source_id": sid,
-                    "file_path": tool_result.get("source_file") or tool_result.get("file_path", ""),
-                    "snippet": tool_result.get("source_snippet") or tool_result.get("text_snippet", ""),
-                })
+                sources_list.append(
+                    {
+                        "source_id": sid,
+                        "file_path": tool_result.get("source_file")
+                        or tool_result.get("file_path", ""),
+                        "snippet": tool_result.get("source_snippet")
+                        or tool_result.get("text_snippet", ""),
+                    }
+                )
             sup_sid = tool_result.get("superseded_source_id")
             if sup_sid and not any(s.get("source_id") == sup_sid for s in sources_list):
-                sources_list.append({
-                    "source_id": sup_sid,
-                    "file_path": tool_result.get("superseded_source_file", ""),
-                    "snippet": tool_result.get("superseded_source_snippet", ""),
-                })
+                sources_list.append(
+                    {
+                        "source_id": sup_sid,
+                        "file_path": tool_result.get("superseded_source_file", ""),
+                        "snippet": tool_result.get("superseded_source_snippet", ""),
+                    }
+                )
             for v in tool_result.values():
                 self._collect_sources(v, sources_list)
         elif isinstance(tool_result, list):
@@ -395,9 +422,9 @@ class OrgMindAgent:
     def _post_process_answer(
         self,
         raw_answer: str,
-        sources_collected: List[Dict[str, Any]],
-        tool_results: List[Dict[str, Any]],
-    ) -> Dict[str, Any]:
+        sources_collected: list[dict[str, Any]],
+        tool_results: list[dict[str, Any]],
+    ) -> dict[str, Any]:
         """Validates citations against the graph, guards against hallucinations,
         and appends verified source grounding if omitted by the LLM.
         """
@@ -432,16 +459,13 @@ class OrgMindAgent:
         # Strip any hallucinated citation tags that do not exist in the graph
         if validation["invalid"]:
             for inv_id in validation["invalid"]:
-                answer = re.sub(rf'\[(?:Source:?\s*)?{re.escape(inv_id)}\]', '', answer)
+                answer = re.sub(rf"\[(?:Source:?\s*)?{re.escape(inv_id)}\]", "", answer)
             cited_ids = extract_citations(answer)
             validation = validate_citations_against_graph(cited_ids)
 
         # 3. Grounding & Repair: If sources were retrieved from graph tools, ensure they appear in answer
         valid_turn_sources = [s for s in sources_collected if s.get("source_id")]
-        unmentioned_sources = [
-            s for s in valid_turn_sources
-            if s["source_id"] not in answer
-        ]
+        unmentioned_sources = [s for s in valid_turn_sources if s["source_id"] not in answer]
 
         if unmentioned_sources and not all_empty:
             source_lines = []

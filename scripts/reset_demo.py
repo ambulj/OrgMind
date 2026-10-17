@@ -5,23 +5,26 @@ re-initializes indexes, and re-ingests the base dataset.
 Leaves /data/live files UNLOADED so live update demo moments start from clean baseline.
 """
 
-import sys
 import os
+import sys
 from pathlib import Path
 
 project_root = str(Path(__file__).resolve().parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
+core_pkg = os.path.join(project_root, "packages", "core")
+if core_pkg not in sys.path:
+    sys.path.insert(0, core_pkg)
 
-from orgmind.db import get_db_client, get_graph, query_graph
+from orgmind.db import get_db_client, query_graph
 from orgmind.ingest_structured import run_all_structured_ingestion
 from orgmind.ingest_unstructured import run_all_unstructured_ingestion
 
 
 def reset_northwind_graph(graph_name: str = "northwind_labs") -> bool:
-    print(f"==================================================")
+    print("==================================================")
     print(f" [OrgMind Demo Reset] Resetting graph: '{graph_name}'")
-    print(f"==================================================")
+    print("==================================================")
 
     client = get_db_client()
     try:
@@ -35,7 +38,9 @@ def reset_northwind_graph(graph_name: str = "northwind_labs") -> bool:
             g.delete()
             print(f"[PASS] Successfully wiped '{graph_name}'.")
         else:
-            print(f"[INFO] Graph '{graph_name}' does not exist yet. Proceeding with clean initialization.")
+            print(
+                f"[INFO] Graph '{graph_name}' does not exist yet. Proceeding with clean initialization."
+            )
 
     except Exception as exc:
         print(f"[WARN] Error during graph deletion: {exc}")

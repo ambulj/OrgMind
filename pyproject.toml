@@ -3,20 +3,71 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "orgmind"
-version = "0.1.0"
-description = "Company Brain Knowledge Graph & Agent on FalkorDB"
-authors = [{ name = "OrgMind Team" }]
+name = "orgmind-monorepo"
+version = "0.2.0"
+description = "OrgMind: Company Brain Enterprise Knowledge Graph Platform"
+requires-python = ">=3.10"
 dependencies = [
+    "orgmind",
     "falkordb>=1.0.10",
     "litellm>=1.40.0",
     "pydantic>=2.7.0",
+    "pydantic-settings>=2.2.0",
+    "python-dotenv>=1.0.1",
     "streamlit>=1.36.0",
     "pyvis>=0.3.2",
     "mcp>=1.0.0",
-    "python-dotenv>=1.0.1",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.4.0",
+    "mypy>=1.10.0",
+    "pre-commit>=3.7.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "packages/core"}
+
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["packages/core"]
 include = ["orgmind*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = [
+    ".git",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".venv",
+    "node_modules",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+ignore = [
+    "E501",   # line length handled by formatter
+    "E402",   # module level imports after sys.path setup
+    "B008",   # do not perform function calls in argument defaults (FastAPI Depends)
+    "SIM108", # ternary operator replacement
+    "SIM115", # context manager for open in quick scripts
+    "B905",   # zip without explicit strict
+]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = false
+warn_unused_configs = true
+warn_unused_ignores = true
+check_untyped_defs = true
+ignore_missing_imports = true
+mypy_path = ["packages/core"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "packages/core"]
+addopts = "-v --tb=short"

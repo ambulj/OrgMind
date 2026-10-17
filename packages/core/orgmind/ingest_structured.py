@@ -23,7 +23,7 @@ def ingest_people(csv_path: str = "data/people.csv") -> int:
     """Loads people.csv into Person nodes."""
     graph = get_graph()
     count = 0
-    with open(csv_path, mode="r", encoding="utf-8") as f:
+    with open(csv_path, encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
             query = """
@@ -33,13 +33,16 @@ def ingest_people(csv_path: str = "data/people.csv") -> int:
                 p.role = $role,
                 p.aliases = $aliases
             """
-            graph.query(query, {
-                "id": row["id"].strip(),
-                "name": row["name"].strip(),
-                "email": row["email"].strip(),
-                "role": row["role"].strip(),
-                "aliases": row.get("aliases", "").strip(),
-            })
+            graph.query(
+                query,
+                {
+                    "id": row["id"].strip(),
+                    "name": row["name"].strip(),
+                    "email": row["email"].strip(),
+                    "role": row["role"].strip(),
+                    "aliases": row.get("aliases", "").strip(),
+                },
+            )
             count += 1
     print(f"[Ingest] Loaded {count} Person nodes.")
     return count
@@ -49,7 +52,7 @@ def ingest_teams(csv_path: str = "data/teams.csv") -> int:
     """Loads teams.csv into Team nodes and sets up team lead relationships."""
     graph = get_graph()
     count = 0
-    with open(csv_path, mode="r", encoding="utf-8") as f:
+    with open(csv_path, encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
             query = """
@@ -61,12 +64,15 @@ def ingest_teams(csv_path: str = "data/teams.csv") -> int:
             MATCH (p:Person {id: $lead_id})
             MERGE (p)-[:MEMBER_OF {role: 'Lead'}]->(t)
             """
-            graph.query(query, {
-                "id": row["id"].strip(),
-                "name": row["name"].strip(),
-                "lead_id": row["lead_id"].strip(),
-                "description": row["description"].strip(),
-            })
+            graph.query(
+                query,
+                {
+                    "id": row["id"].strip(),
+                    "name": row["name"].strip(),
+                    "lead_id": row["lead_id"].strip(),
+                    "description": row["description"].strip(),
+                },
+            )
             count += 1
     print(f"[Ingest] Loaded {count} Team nodes.")
     return count
@@ -76,7 +82,7 @@ def ingest_projects(csv_path: str = "data/projects.csv") -> int:
     """Loads projects.csv and links teams and project leads."""
     graph = get_graph()
     count = 0
-    with open(csv_path, mode="r", encoding="utf-8") as f:
+    with open(csv_path, encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
             query = """
@@ -91,14 +97,17 @@ def ingest_projects(csv_path: str = "data/projects.csv") -> int:
             MATCH (lead:Person {id: $lead_person_id})
             MERGE (lead)-[:WORKS_ON {role: 'Lead'}]->(pr)
             """
-            graph.query(query, {
-                "id": row["id"].strip(),
-                "name": row["name"].strip(),
-                "team_id": row["owner_team_id"].strip(),
-                "lead_person_id": row["lead_person_id"].strip(),
-                "status": row["status"].strip(),
-                "description": row["description"].strip(),
-            })
+            graph.query(
+                query,
+                {
+                    "id": row["id"].strip(),
+                    "name": row["name"].strip(),
+                    "team_id": row["owner_team_id"].strip(),
+                    "lead_person_id": row["lead_person_id"].strip(),
+                    "status": row["status"].strip(),
+                    "description": row["description"].strip(),
+                },
+            )
             count += 1
     print(f"[Ingest] Loaded {count} Project nodes.")
     return count
@@ -107,7 +116,7 @@ def ingest_projects(csv_path: str = "data/projects.csv") -> int:
 def ingest_tickets(json_path: str = "data/tickets.json") -> int:
     """Loads tickets.json into Ticket nodes, linking author and mentioned topics."""
     graph = get_graph()
-    with open(json_path, mode="r", encoding="utf-8") as f:
+    with open(json_path, encoding="utf-8") as f:
         tickets = json.load(f)
 
     count = 0
@@ -126,16 +135,19 @@ def ingest_tickets(json_path: str = "data/tickets.json") -> int:
         MATCH (pr:Project {id: $project_id})
         MERGE (tk)-[:PART_OF]->(pr)
         """
-        graph.query(query, {
-            "id": tick["id"],
-            "title": tick["title"],
-            "status": tick["status"],
-            "created_at": tick["created_at"],
-            "description": tick["description"],
-            "author_id": tick["author_id"],
-            "assignee_id": tick.get("assignee_id", ""),
-            "project_id": tick["project_id"],
-        })
+        graph.query(
+            query,
+            {
+                "id": tick["id"],
+                "title": tick["title"],
+                "status": tick["status"],
+                "created_at": tick["created_at"],
+                "description": tick["description"],
+                "author_id": tick["author_id"],
+                "assignee_id": tick.get("assignee_id", ""),
+                "project_id": tick["project_id"],
+            },
+        )
 
         # Link Assignee if present
         if tick.get("assignee_id"):
@@ -177,7 +189,7 @@ def ingest_ownership_history(csv_path: str = "data/ownership_history.csv") -> in
         return 0
 
     count = 0
-    with open(csv_path, mode="r", encoding="utf-8") as f:
+    with open(csv_path, encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
             query = """
@@ -187,13 +199,16 @@ def ingest_ownership_history(csv_path: str = "data/ownership_history.csv") -> in
             SET r.valid_to = $valid_to,
                 r.source = $source_doc_id
             """
-            graph.query(query, {
-                "project_id": row["project_id"].strip(),
-                "owner_id": row["owner_id"].strip(),
-                "valid_from": row["valid_from"].strip(),
-                "valid_to": row["valid_to"].strip() if row.get("valid_to") else "",
-                "source_doc_id": row.get("source_doc_id", "").strip(),
-            })
+            graph.query(
+                query,
+                {
+                    "project_id": row["project_id"].strip(),
+                    "owner_id": row["owner_id"].strip(),
+                    "valid_from": row["valid_from"].strip(),
+                    "valid_to": row["valid_to"].strip() if row.get("valid_to") else "",
+                    "source_doc_id": row.get("source_doc_id", "").strip(),
+                },
+            )
             count += 1
 
     print(f"[Ingest] Loaded {count} Ownership History records.")

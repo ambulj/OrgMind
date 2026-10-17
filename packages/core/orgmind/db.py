@@ -7,9 +7,8 @@ Technical Terms:
 """
 
 import os
-import sys
-from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from dotenv import load_dotenv
 from falkordb import FalkorDB
 
@@ -41,7 +40,7 @@ def get_db_client() -> FalkorDB:
         raise
 
 
-def get_graph(graph_name: Optional[str] = None):
+def get_graph(graph_name: str | None = None):
     """Selects and returns a specific graph instance within FalkorDB."""
     if graph_name is None:
         graph_name = os.getenv("FALKORDB_GRAPH_NAME", "northwind_labs")
@@ -82,7 +81,7 @@ def init_schema(graph=None) -> None:
     print("[OrgMind] Schema & indexes successfully initialized.")
 
 
-def query_graph(query: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+def query_graph(query: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     """Executes a Cypher query with optional parameters and returns records as Python dictionaries.
 
     Args:
@@ -97,7 +96,7 @@ def query_graph(query: str, params: Optional[Dict[str, Any]] = None) -> List[Dic
 
     # TODO: In Person A sprint, convert FalkorDB QueryResult result_set into standard dict rows
     result = graph.query(query, params)
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
 
     if hasattr(result, "header") and hasattr(result, "result_set"):
         headers = [col[1] if isinstance(col, (list, tuple)) else str(col) for col in result.header]

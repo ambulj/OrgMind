@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "orgmind"
+version = "0.2.0"
+description = "OrgMind: Company Brain Knowledge Graph & Agent on FalkorDB"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "OrgMind Engineering Team" }]
+dependencies = [
+    "falkordb>=1.0.10",
+    "litellm>=1.40.0",
+    "pydantic>=2.7.0",
+    "python-dotenv>=1.0.1",
+    "mcp>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.4.0",
+    "mypy>=1.10.0",
+    "pre-commit>=3.7.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["orgmind*"]
