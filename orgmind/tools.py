@@ -116,31 +116,148 @@ def who_owns(project_or_topic: str) -> Dict[str, Any]:
 
 def who_knows_about(topic: str) -> Dict[str, Any]:
     """Ranks people with demonstrated evidence of knowing about a topic based on
-    authored documents, tickets, and chat contributions.
+    a weighted scoring system across architecture docs, decisions, tickets, and chats.
+
+    Weights:
+    - Architecture Docs / Decisions / Drafts: 3.0 points
+    - Authored Tickets: 2.0 points
+    - Assigned Tickets: 1.5 points
+    - Chat Channel Messages: 1.0 point
 
     Args:
-        topic: The topic keyword (e.g. 'OAuth', 'Kubernetes', 'Billing').
+        topic: The topic keyword (e.g. 'OAuth', 'Kubernetes', 'Billing', 'Paynova').
 
     Returns:
-        Ranked list of people with evidence counts and sample evidence item IDs.
+        Ranked list of people with weighted scores, breakdown, and sample evidence item IDs.
     """
+    clean_topic = topic.strip()
+    topic_synonyms = {
+        "authentication": "OAuth",
+        "auth": "OAuth",
+        "login": "OAuth",
+        "sso": "OAuth",
+        "payment": "Paynova",
+        "payments": "Paynova",
+        "gateway": "Paynova",
+        "k8s": "Kubernetes",
+        "infra": "Kubernetes",
+        "database": "Security",
+    }
+    resolved_topic = topic_synonyms.get(clean_topic.lower(), clean_topic)
+
     cypher = """
     MATCH (p:Person)-[:AUTHORED]->(item)-[:MENTIONS|ABOUT]->(top:Topic)
     WHERE toLower(top.name) = toLower($topic)
-    WITH p, count(item) AS evidence_count, collect(item.id) AS evidence_items
-    RETURN p.id AS person_id,
-           p.name AS person_name,
-           p.role AS role,
-           evidence_count,
-           evidence_items[0..5] AS sample_evidence
-    ORDER BY evidence_count DESC
-    LIMIT 5
+    RETURN p.id AS person_id, p.name AS person_name, p.role AS role,
+           labels(item)[0] AS item_type, item.id AS item_id
+    UNION
+    MATCH (p:Person)-[:ASSIGNED_TO]->(tk:Ticket)-[:ABOUT]->(top:Topic)
+    WHERE toLower(top.name) = toLower($topic)
+    RETURN p.id AS person_id, p.name AS person_name, p.role AS role,
+           'AssignedTicket' AS item_type, tk.id AS item_id
+    UNION
+    MATCH (d:Decision)-[:DECIDED_BY]->(p:Person)
+    WHERE toLower(d.topic) = toLower($topic) OR (d)-[:ABOUT]->(:Topic {name: $topic})
+    RETURN p.id AS person_id, p.name AS person_name, p.role AS role,
+           'Decision' AS item_type, d.id AS item_id
+    UNION
+    MATCH (p:Person)-[:AUTHORED]->(dr:DraftRecommendation)
+    WHERE toLower(dr.topic) = toLower($topic)
+    RETURN p.id AS person_id, p.name AS person_name, p.role AS role,
+           'DraftRecommendation' AS item_type, dr.id AS item_id
     """
-    rows = query_graph(cypher, {"topic": topic})
+    rows = query_graph(cypher, {"topic": resolved_topic})
+
+    if not rows:
+        # Fallback substring search
+        fallback_cypher = """
+        MATCH (p:Person)-[:AUTHORED]->(item)
+        WHERE toLower(item.id) CONTAINS toLower($topic)
+           OR (item.title IS NOT NULL AND toLower(item.title) CONTAINS toLower($topic))
+           OR (item.text IS NOT NULL AND toLower(item.text) CONTAINS toLower($topic))
+        RETURN p.id AS person_id, p.name AS person_name, p.role AS role,
+               labels(item)[0] AS item_type, item.id AS item_id
+        """
+        rows = query_graph(fallback_cypher, {"topic": clean_topic})
+
+    # Group and calculate weighted scores
+    person_data: Dict[str, Dict[str, Any]] = {}
+    for r in rows:
+        pid = r["person_id"]
+        if pid not in person_data:
+            person_data[pid] = {
+                "person_id": pid,
+                "person_name": r["person_name"],
+                "role": r["role"],
+                "score": 0.0,
+                "doc_count": 0,
+                "ticket_count": 0,
+                "chat_count": 0,
+                "sample_evidence": [],
+                "item_ids": set(),
+            }
+
+        itype = r["item_type"]
+        item_id = r["item_id"]
+
+        if item_id not in person_data[pid]["item_ids"]:
+            person_data[pid]["item_ids"].add(item_id)
+            if len(person_data[pid]["sample_evidence"]) < 5:
+                person_data[pid]["sample_evidence"].append(item_id)
+
+            if itype in ("Document", "Decision", "DraftRecommendation"):
+                weight = 3.0
+                person_data[pid]["doc_count"] += 1
+            elif itype == "Ticket":
+                weight = 2.0
+                person_data[pid]["ticket_count"] += 1
+            elif itype == "AssignedTicket":
+                weight = 1.5
+                person_data[pid]["ticket_count"] += 1
+            elif itype == "Message":
+                weight = 1.0
+                person_data[pid]["chat_count"] += 1
+            else:
+                weight = 1.0
+
+            person_data[pid]["score"] += weight
+
+    ranked_experts = sorted(person_data.values(), key=lambda x: x["score"], reverse=True)
+
+    # Format structured expert profiles
+    clean_ranked = []
+    for exp in ranked_experts[:5]:
+        total_items = exp["doc_count"] + exp["ticket_count"] + exp["chat_count"]
+        confidence = "High" if exp["score"] >= 8.0 else ("Medium" if exp["score"] >= 3.0 else "Low")
+        clean_ranked.append({
+            "person_id": exp["person_id"],
+            "person_name": exp["person_name"],
+            "role": exp["role"],
+            "weighted_score": round(exp["score"], 1),
+            "evidence_count": total_items,
+            "confidence_tier": confidence,
+            "evidence_breakdown": {
+                "architecture_and_decisions": exp["doc_count"],
+                "tickets": exp["ticket_count"],
+                "chat_messages": exp["chat_count"],
+            },
+            "sample_evidence": exp["sample_evidence"],
+        })
+
+    top_expert = clean_ranked[0]["person_name"] if clean_ranked else "None"
+    summary = (
+        f"Top expert for '{clean_topic}' is {top_expert} with a weighted evidence score of "
+        f"{clean_ranked[0]['weighted_score'] if clean_ranked else 0} pts."
+        if clean_ranked else f"No demonstrated authorship or ticket activity found for '{clean_topic}'."
+    )
+
     return {
-        "topic": topic,
-        "ranked_experts": rows,
-        "evidence_summary": f"Found {len(rows)} contributors with direct authorship evidence on '{topic}'."
+        "topic": clean_topic,
+        "resolved_topic": resolved_topic,
+        "ranked_experts": clean_ranked,
+        "top_expert": top_expert,
+        "evidence_summary": summary,
+        "found": len(clean_ranked) > 0,
     }
 
 
@@ -310,12 +427,146 @@ def find_related(entity_id_or_name: str, hops: int = 2) -> Dict[str, Any]:
     }
 
 
+def compare_draft_vs_decision(topic: str) -> Dict[str, Any]:
+    """Compares preliminary draft proposals against official ratified decisions for a topic.
+    Identifies who authored each, what warnings or trade-offs were raised, and how decisions evolved.
+
+    Args:
+        topic: Topic or technology area (e.g. 'Paynova', 'Billing', 'OAuth').
+
+    Returns:
+        Structured comparison between draft proposal and ratified policy with source citations.
+    """
+    clean_topic = topic.strip()
+    topic_synonyms = {
+        "authentication": "OAuth",
+        "auth": "OAuth",
+        "login": "OAuth",
+        "payment": "Paynova",
+        "payments": "Paynova",
+        "billing": "Billing",
+    }
+    resolved_topic = topic_synonyms.get(clean_topic.lower(), clean_topic)
+
+    # 1. Query Draft Recommendations
+    draft_cypher = """
+    MATCH (dr:DraftRecommendation)
+    WHERE toLower(dr.topic) CONTAINS toLower($topic)
+       OR toLower($topic) CONTAINS toLower(dr.topic)
+    OPTIONAL MATCH (p:Person)-[:AUTHORED]->(dr)
+    OPTIONAL MATCH (dr)-[:DERIVED_FROM]->(src:Source)
+    OPTIONAL MATCH (doc:Document)-[:CONTAINS_DRAFT]->(dr)
+    RETURN dr.id AS draft_id,
+           dr.topic AS topic,
+           dr.recommendation AS recommendation,
+           dr.date AS draft_date,
+           p.name AS author_name,
+           p.id AS author_id,
+           src.id AS source_id,
+           src.file_path AS source_file,
+           src.text_snippet AS source_snippet,
+           doc.id AS document_id
+    """
+    draft_rows = query_graph(draft_cypher, {"topic": resolved_topic})
+
+    # 2. Query Ratified Decisions
+    decision_cypher = """
+    MATCH (d:Decision)
+    WHERE toLower(d.topic) CONTAINS toLower($topic)
+       OR toLower($topic) CONTAINS toLower(d.topic)
+       OR (d)-[:ABOUT]->(:Topic {name: $topic})
+    OPTIONAL MATCH (d)-[:DECIDED_BY]->(p:Person)
+    OPTIONAL MATCH (d)-[:DERIVED_FROM]->(src:Source)
+    OPTIONAL MATCH (d)-[:SUPERSEDES]->(old:Decision)
+    RETURN d.id AS decision_id,
+           d.text AS decision_text,
+           d.status AS status,
+           d.valid_from AS valid_from,
+           d.valid_to AS valid_to,
+           p.name AS decider_name,
+           p.id AS decider_id,
+           src.id AS source_id,
+           src.file_path AS source_file,
+           src.text_snippet AS source_snippet,
+           old.id AS superseded_decision_id
+    ORDER BY d.valid_from DESC
+    """
+    decision_rows = query_graph(decision_cypher, {"topic": resolved_topic})
+
+    draft = draft_rows[0] if draft_rows else None
+    current_decision = next((d for d in decision_rows if d["status"] == "current"), None)
+    superseded_decisions = [d for d in decision_rows if d["status"] == "superseded"]
+
+    sources = []
+    if draft and draft.get("source_id"):
+        sources.append(draft["source_id"])
+    if current_decision and current_decision.get("source_id"):
+        sources.append(current_decision["source_id"])
+
+    if draft and current_decision:
+        divergence_summary = (
+            f"Draft proposal by {draft.get('author_name', 'Author')} on {draft.get('draft_date', '')} advised: "
+            f"\"{draft.get('recommendation', '')}\". "
+            f"However, ratified policy by {current_decision.get('decider_name', 'Decider')} on "
+            f"{current_decision.get('valid_from', '')} established: \"{current_decision.get('decision_text', '')}\"."
+        )
+        if superseded_decisions:
+            divergence_summary += (
+                f" Note: Decision was subsequently superseded by {len(superseded_decisions)} historical update(s)."
+            )
+    elif draft and not current_decision:
+        divergence_summary = f"Draft recommendation exists by {draft.get('author_name')} but no ratified decision was recorded."
+    elif current_decision and not draft:
+        divergence_summary = f"Official decision recorded by {current_decision.get('decider_name')}, but no conflicting draft proposal was found in the graph."
+    else:
+        divergence_summary = f"No draft recommendations or decisions found for topic '{clean_topic}'."
+
+    return {
+        "topic": clean_topic,
+        "resolved_topic": resolved_topic,
+        "draft_proposal": draft,
+        "ratified_decision": current_decision,
+        "historical_superseded_decisions": superseded_decisions,
+        "key_divergence_summary": divergence_summary,
+        "sources": sources,
+        "found": draft is not None or current_decision is not None,
+    }
+
+
 # ============================================================================
 # WRITE / ACTION TOOLS (Simulated Actions Written Back to Graph)
 # ============================================================================
 
-def create_ticket(title: str, description: str, project_id: str, author_id: str = "P_ALICE") -> Dict[str, Any]:
-    """Simulates creating a ticket and writes it back into the graph."""
+def create_ticket(
+    title: str,
+    description: str,
+    project_id: str,
+    author_id: str = "P_ALICE",
+    confirm: bool = True
+) -> Dict[str, Any]:
+    """Simulates creating a ticket and writes it back into the graph.
+
+    Args:
+        title: Title of the ticket
+        description: Detailed description
+        project_id: Target project ID (e.g. 'PRJ_OAUTH_UPGRADE')
+        author_id: Creator Person ID
+        confirm: If False, returns proposed preview without modifying database.
+    """
+    if not confirm:
+        return {
+            "action": "create_ticket",
+            "status": "proposed_pending_confirmation",
+            "confirm_required": True,
+            "preview": {
+                "title": title,
+                "description": description,
+                "project_id": project_id,
+                "author_id": author_id,
+            },
+            "prompt": f"Proposed Ticket: '{title}' for project '{project_id}'. Pass confirm=True to write to graph."
+        }
+
     graph = get_graph()
     now_iso = datetime.now(timezone.utc).isoformat()
     ticket_id = f"TICK-SIM-{int(datetime.now().timestamp()) % 10000}"
@@ -354,8 +605,33 @@ def create_ticket(title: str, description: str, project_id: str, author_id: str 
     }
 
 
-def draft_message(channel: str, text: str, author_id: str = "P_ALICE") -> Dict[str, Any]:
-    """Simulates drafting a message to a team channel and writes it to the graph."""
+def draft_message(
+    channel: str,
+    text: str,
+    author_id: str = "P_ALICE",
+    confirm: bool = True
+) -> Dict[str, Any]:
+    """Simulates drafting a message to a team channel and writes it to the graph.
+
+    Args:
+        channel: Channel name, e.g. '#backend-eng'
+        text: Message body text
+        author_id: Author Person ID
+        confirm: If False, returns proposed preview without modifying database.
+    """
+    if not confirm:
+        return {
+            "action": "draft_message",
+            "status": "proposed_pending_confirmation",
+            "confirm_required": True,
+            "preview": {
+                "channel": channel,
+                "text": text,
+                "author_id": author_id,
+            },
+            "prompt": f"Proposed Message to {channel}: '{text[:60]}...'. Pass confirm=True to write to graph."
+        }
+
     graph = get_graph()
     now_iso = datetime.now(timezone.utc).isoformat()
     msg_id = f"MSG-SIM-{int(datetime.now().timestamp()) % 10000}"
@@ -392,8 +668,33 @@ def draft_message(channel: str, text: str, author_id: str = "P_ALICE") -> Dict[s
     }
 
 
-def assign_task(task_title: str, assignee_person_id: str, project_id: str) -> Dict[str, Any]:
-    """Simulates assigning a task to a person for a project and updates graph relationships."""
+def assign_task(
+    task_title: str,
+    assignee_person_id: str,
+    project_id: str,
+    confirm: bool = True
+) -> Dict[str, Any]:
+    """Simulates assigning a task to a person for a project and updates graph relationships.
+
+    Args:
+        task_title: Title of the task
+        assignee_person_id: Assignee Person ID
+        project_id: Target project ID
+        confirm: If False, returns proposed preview without modifying database.
+    """
+    if not confirm:
+        return {
+            "action": "assign_task",
+            "status": "proposed_pending_confirmation",
+            "confirm_required": True,
+            "preview": {
+                "task_title": task_title,
+                "assignee_id": assignee_person_id,
+                "project_id": project_id,
+            },
+            "prompt": f"Proposed Assignment: '{task_title}' to {assignee_person_id}. Pass confirm=True to write to graph."
+        }
+
     graph = get_graph()
     task_id = f"TASK-SIM-{int(datetime.now().timestamp()) % 10000}"
 
@@ -446,6 +747,7 @@ TOOLS_REGISTRY = {
     "who_owns": who_owns,
     "who_knows_about": who_knows_about,
     "trace_decision": trace_decision,
+    "compare_draft_vs_decision": compare_draft_vs_decision,
     "what_changed_since": what_changed_since,
     "get_source": get_source,
     "find_related": find_related,

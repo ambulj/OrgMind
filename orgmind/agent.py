@@ -122,6 +122,23 @@ AGENT_TOOLS_SCHEMA = [
     {
         "type": "function",
         "function": {
+            "name": "compare_draft_vs_decision",
+            "description": "Compares preliminary draft proposals against official ratified decisions for a topic. Identifies dissenting opinions, unheeded warnings, and trade-offs.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "Topic or technology to compare (e.g. 'Paynova', 'Billing', 'OAuth')."
+                    }
+                },
+                "required": ["topic"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "what_changed_since",
             "description": "Lists all decisions and tickets modified or created since a given date.",
             "parameters": {

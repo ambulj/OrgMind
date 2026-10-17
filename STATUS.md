@@ -19,12 +19,13 @@
 | **Unstructured Ingestion** | **REALLY WORKS** | `python orgmind/ingest_unstructured.py`<br/>`Processed docs/auth_architecture.md`<br/>`Processed docs/billing_migration.md`<br/>`Processed 3 chat jsonl files.` | Parses Markdown ADRs and JSONL chats. Links `Source` chunks and topics. |
 | **Entity Resolution** | **REALLY WORKS** | `resolve_person('Pri') -> 'P_PRIYA'`<br/>`resolve_with_status('Ailce Chen') -> 'P_ALICE' (fuzzy, 0.90)`<br/>`resolve_with_status('ghost_user') -> None (flagged for review)` | Exact alias matching, difflib fuzzy typo tolerance, and flagged review list for unknown handles (no phantom nodes). |
 | **Tool: who_owns** | **REALLY WORKS** | `who_owns('OAuth Upgrade') -> {'target_name': 'OAuth 2.1 & Keycloak Migration', 'owner_name': 'Platform & Auth', 'lead_name': 'Alice Chen', 'found': True}` | Enhanced with token splitting and project ID matching. |
-| **Tool: who_knows_about** | **REALLY WORKS** | `who_knows_about('Paynova') -> Top: Rohan Iyer (4 items), Aarav Mehta (4 items)` | Counts authored items and chat mentions. Weighted scoring is slated for Phase 4. |
-| **Tool: trace_decision** | **REALLY WORKS** | `trace_decision('OAuth') -> Decision DEC_AUTH_2026_01, Source SRC_DOC_AUTH_01` | Multi-hop OPTIONAL MATCH verified in FalkorDB. |
+| **Tool: who_knows_about** | **REALLY WORKS** | `who_knows_about('Paynova') -> Rohan Iyer (9.0 pts) vs Aarav Mehta (4.0 pts)`<br/>`who_knows_about('OAuth') -> Alice Chen (14.0 pts)` | Weighted evidence scoring: Architecture Docs/Decisions=3.0, Authored Tickets=2.0, Assigned Tickets=1.5, Chats=1.0. Completely resolves near-ties. |
+| **Tool: trace_decision** | **REALLY WORKS** | `trace_decision('OAuth') -> Decision DEC_AUTH_2026_01, Source SRC_DOC_AUTH_01`<br/>`trace_decision('authentication') -> DEC_AUTH_2026_01` (synonym resolution) | Multi-hop OPTIONAL MATCH with synonym mapping and substring fallback. |
+| **Tool: compare_draft_vs_decision** | **REALLY WORKS** | `compare_draft_vs_decision('Paynova')`<br/>Draft: Rohan Iyer (2026-02-24, `SRC_DOC_DRAFT_PAYNOVA_EVAL`) vs Ratified Decision: Priya Sharma (2026-03-01, `SRC_DOC_PAYNOVA_DECISION_01`). | Surfaces dissenting architectural proposals, unheeded warnings, and trade-off rationales. |
 | **Freshness & Superseding** | **REALLY WORKS** | `scripts/test_live_pipeline.py` PASSED 100%.<br/>`preview_decision`: detects target superseding candidate without DB mutation.<br/>`commit_decision`: creates :SUPERSEDES edge and attaches Source.<br/>`impact_analysis`: multi-hop traversal finds affected and blocked tickets.<br/>Idempotent re-run returns `noop_idempotent` with identical node/edge counts. | Fully verified live-update pipeline with non-destructive versioning and multi-hop impact traversal. |
 | **Citation Enforcement** | **REALLY WORKS** | Regex citation extractor + FalkorDB graph validator + automatic grounding repair.<br/>Verifies cited sources exist in FalkorDB; appends verified sources footer if LLM omits markdown tags.<br/>Enforces strict honest boundary on no-evidence queries (`"I couldn't find this in the company graph."`). | Zero hallucinations. 100% grounded against graph source nodes. |
 | **Model Evaluation Harness** | **REALLY WORKS** | `tests/run_eval.py --model --limit --output`<br/>Measures turn latency, tool-matching, keyword presence, and citation validity.<br/>Generated `tests/eval_report_ollama_qwen2.5-coder_14b.json` (3/3 100% pass rate). | Supports any LiteLLM model provider (Ollama, OpenAI, Gemini, Anthropic). |
-| **Simulated Actions** | **PARTIAL** | `create_ticket` & `draft_message` write simulated nodes to graph. | Propose-then-confirm UI flow needed in Phase 4/5. |
+| **Simulated Actions** | **REALLY WORKS** | `create_ticket`, `draft_message`, `assign_task`<br/>`confirm=False`: returns structured action proposal without DB write.<br/>`confirm=True`: writes simulated node to FalkorDB. | Two-phase safety workflow for human-in-the-loop action execution. |
 | **Streamlit User Interface** | **REALLY WORKS** | `curl -I http://localhost:8501/` returned `HTTP/1.1 200 OK`. Interactive Pyvis graph renders in-memory HTML. | Tested in browser. UI explainability panel needed in Phase 5. |
 | **MCP Server** | **UNTESTED** | FastMCP stub exists in `orgmind/mcp_server.py`. | Dedicated test client & proof needed in Phase 6. |
 
@@ -206,6 +207,54 @@ PS C:\Users\sauja\Downloads\New folder> python tests/run_eval.py --limit 3
 PS C:\Users\sauja\Downloads\New folder> python -c "from orgmind.agent import OrgMindAgent; res = OrgMindAgent().run('Who owns the Quantum Computing AI Teleporter project?'); print(res)"
 {'answer': "I couldn't find this in the company graph.", 'sources_used': [], 'tool_calls': [{'tool': 'who_owns', 'args': {'project_or_topic': 'Quantum Computing AI Teleporter'}}], 'citations': {'valid': [], 'invalid': []}, 'grounded': True}
 ```
+
+---
+
+## 🔬 Phase 4 Verification: Better Tools & Weighted Evidence (Hour 18.0)
+
+```text
+PS C:\Users\sauja\Downloads\New folder> python scripts/test_tools_phase4.py
+=================================================================
+ [Phase 4 Test] Advanced Graph Tools & Weighted Evidence
+=================================================================
+
+[Step 1] Testing who_knows_about('Paynova') with weighted scoring...
+ Summary: Top expert for 'Paynova' is Rohan Iyer with a weighted evidence score of 9.0 pts.
+   - Rohan Iyer (Senior Backend Engineer): 9.0 pts [High] {'architecture_and_decisions': 1, 'tickets': 1, 'chat_messages': 4}
+   - Priya Sharma (Payments Engineering Lead): 8.0 pts [High] {'architecture_and_decisions': 1, 'tickets': 1, 'chat_messages': 3}
+   - Karan Verma (Full-Stack Engineer): 5.0 pts [Medium] {'architecture_and_decisions': 0, 'tickets': 1, 'chat_messages': 3}
+   - Aarav Mehta (Infrastructure & QA Engineer): 4.0 pts [Medium] {'architecture_and_decisions': 0, 'tickets': 0, 'chat_messages': 4}
+   - Neha Kapoor (Payments Product Manager): 3.5 pts [Medium] {'architecture_and_decisions': 0, 'tickets': 1, 'chat_messages': 2}
+ -> PASS: Tie-breaking verified (Rohan 9.0 pts vs Aarav 4.0 pts).
+
+[Step 2] Testing who_knows_about('OAuth')...
+ Summary: Top expert for 'OAuth' is Alice Chen with a weighted evidence score of 14.0 pts.
+ -> PASS: Alice Chen confirmed as authoritative architect on OAuth.
+
+[Step 3] Testing compare_draft_vs_decision('Paynova')...
+ Comparison Results:
+   Draft Author: Rohan Iyer (2026-02-24)
+   Draft Advice: Strongly advise against Paynova due to lack of idempotency; recommend expanding Stripe Billing V2 or Adyen to Europe.
+   Ratified Decider: Priya Sharma (2026-03-01)
+   Ratified Text: Adopt Paynova Gateway as primary rail for European recurring subscriptions.
+   Sources: ['SRC_DOC_DRAFT_PAYNOVA_EVAL', 'SRC_DOC_PAYNOVA_DECISION_01']
+   Divergence Summary: Draft proposal by Rohan Iyer on 2026-02-24 advised: "Strongly advise against Paynova due to lack of idempotency; recommend expanding Stripe Billing V2 or Adyen to Europe.". However, ratified policy by Priya Sharma on 2026-03-01 established: "Adopt Paynova Gateway as primary rail for European recurring subscriptions.".
+ -> PASS: Dissenting draft evaluation accurately compared against ratified decision.
+
+[Step 4] Testing Action Simulation Safety (Propose-Then-Confirm)...
+ -> PASS: create_ticket(confirm=False) returned proposal preview without database modification.
+ -> PASS: create_ticket(confirm=True) recorded simulated node 'TICK-SIM-1482' in graph.
+ -> PASS: draft_message confirmed execution (MSG-SIM-1482).
+ -> PASS: assign_task confirmed execution (TASK-SIM-1482).
+
+[Step 5] Cleaning up simulated test nodes...
+ -> PASS: Graph clean.
+
+=================================================================
+ ALL PHASE 4 ADVANCED TOOL TESTS PASSED (100%)
+=================================================================
+```
+
 
 
 
