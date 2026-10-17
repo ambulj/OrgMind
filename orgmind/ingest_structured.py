@@ -117,7 +117,8 @@ def ingest_tickets(json_path: str = "data/tickets.json") -> int:
         SET tk.title = $title,
             tk.status = $status,
             tk.created_at = $created_at,
-            tk.description = $description
+            tk.description = $description,
+            tk.assignee_id = $assignee_id
         WITH tk
         MATCH (p:Person {id: $author_id})
         MERGE (p)-[:AUTHORED {timestamp: $created_at}]->(tk)
@@ -132,8 +133,18 @@ def ingest_tickets(json_path: str = "data/tickets.json") -> int:
             "created_at": tick["created_at"],
             "description": tick["description"],
             "author_id": tick["author_id"],
+            "assignee_id": tick.get("assignee_id", ""),
             "project_id": tick["project_id"],
         })
+
+        # Link Assignee if present
+        if tick.get("assignee_id"):
+            assign_query = """
+            MATCH (tk:Ticket {id: $tick_id})
+            MATCH (p:Person {id: $assignee_id})
+            MERGE (p)-[:ASSIGNED_TO]->(tk)
+            """
+            graph.query(assign_query, {"tick_id": tick["id"], "assignee_id": tick["assignee_id"]})
 
         # Link topics
         for topic in tick.get("topics", []):

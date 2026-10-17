@@ -360,6 +360,17 @@ def assign_task(task_title: str, assignee_person_id: str, project_id: str) -> Di
     }
 
 
+def impact_analysis(topic_or_decision_id: str) -> Dict[str, Any]:
+    """Performs multi-hop graph traversal to analyze how a decision impacts the company.
+    Finds affected tickets, blocked work items, affected projects, and responsible personnel.
+
+    Args:
+        topic_or_decision_id: Topic name (e.g. 'Paynova') or Decision ID (e.g. 'DEC_PAYMENTS_...').
+    """
+    from orgmind.freshness import impact_analysis as freshness_impact
+    return freshness_impact(topic_or_decision_id)
+
+
 # Tool registry mapping tool names to callable Python functions
 TOOLS_REGISTRY = {
     "who_owns": who_owns,
@@ -368,6 +379,7 @@ TOOLS_REGISTRY = {
     "what_changed_since": what_changed_since,
     "get_source": get_source,
     "find_related": find_related,
+    "impact_analysis": impact_analysis,
     "create_ticket": create_ticket,
     "draft_message": draft_message,
     "assign_task": assign_task,

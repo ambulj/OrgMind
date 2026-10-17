@@ -126,6 +126,23 @@ AGENT_TOOLS_SCHEMA = [
     {
         "type": "function",
         "function": {
+            "name": "impact_analysis",
+            "description": "Performs multi-hop graph analysis to assess the company impact of a decision or topic. Returns affected tickets, blocked work items, affected projects, and responsible personnel.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "topic_or_decision_id": {
+                        "type": "string",
+                        "description": "Topic name (e.g. 'Paynova') or Decision ID (e.g. 'DEC_PAYMENTS_...')."
+                    }
+                },
+                "required": ["topic_or_decision_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "create_ticket",
             "description": "Simulates creating an issue ticket and links it to a project in the graph.",
             "parameters": {

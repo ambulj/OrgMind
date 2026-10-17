@@ -17,11 +17,11 @@
 | **Safe Demo Reset** | **REALLY WORKS** | `scripts/reset_demo.py` PASSED.<br/>`[PASS] Successfully wiped 'northwind_labs'.`<br/>`[DONE] Clean base state: 72 nodes, 95 edges.` | Deletes ONLY `northwind_labs` via `GRAPH.DELETE`. Leaves `/data/live/` untouched. |
 | **Structured Ingestion** | **REALLY WORKS** | `python orgmind/ingest_structured.py`<br/>`[Ingest] Loaded 11 Person, 4 Team, 4 Project, 3 Ticket nodes.` | CSVs & JSON tickets loaded cleanly. |
 | **Unstructured Ingestion** | **REALLY WORKS** | `python orgmind/ingest_unstructured.py`<br/>`Processed docs/auth_architecture.md`<br/>`Processed docs/billing_migration.md`<br/>`Processed 3 chat jsonl files.` | Parses Markdown ADRs and JSONL chats. Links `Source` chunks and topics. |
-| **Entity Resolution** | **REALLY WORKS** | `resolve_person('Pri') -> 'P_PRIYA'`<br/>`resolve_person('Ro') -> 'P_ROHAN'`<br/>`resolve_person('@alice') -> 'P_ALICE'` | Exact alias matching. Fuzzy typo matching is slated for Phase 2. |
+| **Entity Resolution** | **REALLY WORKS** | `resolve_person('Pri') -> 'P_PRIYA'`<br/>`resolve_with_status('Ailce Chen') -> 'P_ALICE' (fuzzy, 0.90)`<br/>`resolve_with_status('ghost_user') -> None (flagged for review)` | Exact alias matching, difflib fuzzy typo tolerance, and flagged review list for unknown handles (no phantom nodes). |
 | **Tool: who_owns** | **REALLY WORKS** | `who_owns('OAuth Upgrade') -> {'target_name': 'OAuth 2.1 & Keycloak Migration', 'owner_name': 'Platform & Auth', 'lead_name': 'Alice Chen', 'found': True}` | Enhanced with token splitting and project ID matching. |
 | **Tool: who_knows_about** | **REALLY WORKS** | `who_knows_about('Paynova') -> Top: Rohan Iyer (4 items), Aarav Mehta (4 items)` | Counts authored items and chat mentions. Weighted scoring is slated for Phase 4. |
 | **Tool: trace_decision** | **REALLY WORKS** | `trace_decision('OAuth') -> Decision DEC_AUTH_2026_01, Source SRC_DOC_AUTH_01` | Multi-hop OPTIONAL MATCH verified in FalkorDB. |
-| **Freshness & Superseding** | **PARTIAL** | `freshness.apply_decision()` works in Python, but live update UI workflow is not yet interactive preview/commit. | Logic exists; UI integration & idempotency hardening needed in Phase 2. |
+| **Freshness & Superseding** | **REALLY WORKS** | `scripts/test_live_pipeline.py` PASSED 100%.<br/>`preview_decision`: detects target superseding candidate without DB mutation.<br/>`commit_decision`: creates :SUPERSEDES edge and attaches Source.<br/>`impact_analysis`: multi-hop traversal finds affected and blocked tickets.<br/>Idempotent re-run returns `noop_idempotent` with identical node/edge counts. | Fully verified live-update pipeline with non-destructive versioning and multi-hop impact traversal. |
 | **Citation Enforcement** | **PARTIAL** | Agent prompt commands citation `[Source: ID]`; confirmed in sample runs (`AGENT RESPONSE: ... [Source: SRC_DOC_AUTH_01]`). | Currently prompt-only. Hard programmatic validator needed in Phase 3. |
 | **Simulated Actions** | **PARTIAL** | `create_ticket` & `draft_message` write simulated nodes to graph. | Propose-then-confirm UI flow needed in Phase 4/5. |
 | **Streamlit User Interface** | **REALLY WORKS** | `curl -I http://localhost:8501/` returned `HTTP/1.1 200 OK`. Interactive Pyvis graph renders in-memory HTML. | Tested in browser. UI explainability panel needed in Phase 5. |
@@ -116,4 +116,58 @@ PS C:\Users\sauja\Downloads\New folder> python scripts/smoke_test.py
  [OrgMind Smoke Test] ALL CHECKS PASSED (EXIT 0)   
 ==================================================
 ```
+
+---
+
+## ⚡ Phase 2 Verification: Live-Update Pipeline & Ingestion Hardening (Hour 17.0)
+
+```text
+PS C:\Users\sauja\Downloads\New folder> python scripts/test_live_pipeline.py
+============================================================
+ [Phase 2 Test] Live-Update Pipeline & Ingestion Hardening
+============================================================
+
+[Step 0] Resetting graph to clean baseline...
+[DONE] Demo Reset complete! Clean base state: 163 nodes, 267 edges.
+[Baseline] Graph has 163 nodes, 267 edges.
+
+[Step 1] Testing EntityResolver hardening...
+ -> PASS: Exact resolution, fuzzy typo correction, and unknown handle flagging verified.
+
+[Step 2] Testing preview_decision on 'data/live/live_decision_reversal.json'...
+ Preview Output:
+   Status: ready
+   Action: SUPERSEDE
+   Proposed Decision: DEC_PAYMENTS_2026_05_REVERSAL
+   Superseded Candidate: DEC_PAYMENTS_2026_03_PAYNOVA
+ -> PASS: Preview accurately detected superseding target without database mutation.
+
+[Step 3] Testing commit_decision on 'data/live/live_decision_reversal.json'...
+ Commit Output: {'status': 'success', 'new_decision_id': 'DEC_PAYMENTS_2026_05_REVERSAL', 'superseded_decision_id': 'DEC_PAYMENTS_2026_03_PAYNOVA', 'source_id': 'SRC_LIVE_REVERSAL_PAYNOVA_01', 'topic': 'Paynova', 'timestamp': '2026-05-30T10:00:00Z'}
+ -> PASS: Decision committed and supersedes link created.
+
+[Step 4] Testing trace_decision('Paynova')...
+ Found 2 decision entries.
+ -> PASS: Graph provenance trace confirms new reversal active and old decision superseded.
+
+[Step 5] Testing impact_analysis('Paynova')...
+ Summary: Impact Analysis for 'Paynova': Found 3 directly impacted tickets across 1 projects, with 1 blocked work items. Key responsible personnel: Neha Kapoor, Karan Verma, Rohan Iyer, Priya Sharma.
+ Affected tickets: ['TICK-202', 'TICK-203', 'TICK-201']
+ Blocked tickets: ['TICK-202']
+ Responsible people: ['Neha Kapoor', 'Karan Verma', 'Rohan Iyer', 'Priya Sharma']
+ -> PASS: Multi-hop impact analysis surfaced tickets, blockers, projects, and people.
+
+[Step 6] Testing Idempotency (re-committing same live file)...
+ Second Commit Output: {'status': 'noop_idempotent', 'decision_id': 'DEC_PAYMENTS_2026_05_REVERSAL', 'topic': 'Paynova', 'message': "Decision 'DEC_PAYMENTS_2026_05_REVERSAL' already committed with identical content. Graph untouched."}
+ -> PASS: Idempotent re-commit verified (Node count preserved at 165, edges at 271).
+
+[Step 7] Cleaning up: resetting graph to pristine baseline...
+[DONE] Demo Reset complete! Clean base state: 163 nodes, 267 edges.
+ -> PASS: Baseline restored for Demo Moments A-D.
+
+============================================================
+ ALL PHASE 2 INGESTION & LIVE-UPDATE TESTS PASSED (100%)
+============================================================
+```
+
 
