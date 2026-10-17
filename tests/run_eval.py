@@ -23,29 +23,29 @@ def run_evaluation(test_file: str = "tests/test_questions.json"):
     agent = OrgMindAgent()
     passed = 0
 
-    print(f"\n=== Running OrgMind Evaluation Suite ({len(tests)} test cases) ===\n")
+    print(f"\n=== Running OrgMind Evaluation Suite ({len(tests)} test cases) ===\n", flush=True)
 
     for t in tests:
         q_id = t["id"]
         q = t["question"]
-        print(f"[{q_id}] Running: '{q}'")
+        print(f"[{q_id}] Running: '{q}'", flush=True)
         res = agent.run(q)
         answer = res.get("answer", "")
-        print(f"     Answer: {answer[:120]}...")
+        print(f"     Answer: {answer[:120]}...", flush=True)
 
         # Check required substrings
         must_contain = t.get("must_contain", [])
         mismatches = [sub for sub in must_contain if sub.lower() not in answer.lower()]
 
         if not mismatches:
-            print(f"     Result: [PASS]")
+            print(f"     Result: [PASS]", flush=True)
             passed += 1
         else:
-            print(f"     Result: [FAIL] - Missing expected keywords: {mismatches}")
+            print(f"     Result: [FAIL] - Missing expected keywords: {mismatches}", flush=True)
 
-    print(f"\n==========================================")
-    print(f"Score: {passed}/{len(tests)} tests passed ({passed/len(tests)*100:.1f}%)")
-    print(f"==========================================\n")
+    print(f"\n==========================================", flush=True)
+    print(f"Score: {passed}/{len(tests)} tests passed ({passed/len(tests)*100:.1f}%)", flush=True)
+    print(f"==========================================\n", flush=True)
 
 
 if __name__ == "__main__":
