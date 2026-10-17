@@ -282,7 +282,92 @@ Health: 200 ok
 ```
 
 ---
+
+## 🔌 Phase 6 Verification: MCP Protocol & FastMCP Server (Hour 20.0)
+
+**Capabilities Delivered**:
+1. **Model Context Protocol (MCP) Server**: `orgmind/mcp_server.py` compatible with both MCP 1.x FastMCP and MCP 2.x MCPServer. Exposes 11 tools over stdio/JSON-RPC:
+   - `who_owns`
+   - `who_knows_about` (weighted scoring)
+   - `trace_decision` (active + superseded lineage)
+   - `compare_draft_vs_decision` (dissenting draft evaluation)
+   - `impact_analysis` (multi-hop graph dependency traversal)
+   - `what_changed_since`
+   - `get_source` (verbatim snippet chunk fetch)
+   - `find_related`
+   - `create_ticket` (safety confirm flag)
+   - `draft_message` (safety confirm flag)
+   - `assign_task` (safety confirm flag)
+2. **Action Simulation Safety**: Validated that `create_ticket(..., confirm=False)` returns `status: "proposed_pending_confirmation"` with preview metadata and requires explicit confirmation before mutating FalkorDB.
+3. **FalkorDB Read-Only OpenCypher Capability**: Successfully verified team distributions and graph queries over read-only Cypher interface.
+
+**Acceptance Test Output**:
+```text
+PS C:\Users\sauja\Downloads\New folder> python scripts/test_mcp_client.py
+=================================================================
+ [Phase 6 Test] OrgMind MCP Protocol & Server Verification
+=================================================================
+
+[Step 1] Discovering tools registered on OrgMind MCP server...
+ Registered MCP Tools (11 total):
+   - who_owns: Finds who owns a project or topic in Northwind Labs...
+   - who_knows_about: Ranks company members by demonstrated knowledge on a topic...
+   - trace_decision: Traces active decisions, historical superseded decisions...
+   - compare_draft_vs_decision: Compares preliminary draft technical recommendations...
+   - impact_analysis: Performs multi-hop graph dependency analysis...
+   - what_changed_since: Lists all changes (decisions and tickets) since a given date...
+   - get_source: Fetches the exact text snippet for a Source ID...
+   - find_related: Finds neighboring nodes connected up to N hops away...
+   - create_ticket: Simulates creating an issue ticket and links it into the graph...
+   - draft_message: Simulates drafting a message to a team communication channel...
+   - assign_task: Assigns a project task to a team member in the graph...
+ -> PASS: All 11 expected tools discovered over MCP.
+
+[Step 2] Invoking MCP tool 'who_owns' (OAuth)...
+ Current Owners: ['Alice Chen'] | Found: True
+ -> PASS: 'who_owns' successfully resolved owner Alice Chen over MCP.
+
+[Step 3] Invoking MCP tool 'who_knows_about' (Paynova)...
+ Top Expert: Rohan Iyer | Top Score: 9.0 pts
+ -> PASS: 'who_knows_about' ranked Rohan Iyer #1 with weighted evidence.
+
+[Step 4] Invoking MCP tool 'trace_decision' (OAuth)...
+ Active Decision ID: DEC_AUTH_2026_02
+ Decision Text: Reject plain code challenges in authorization requests; enforce S256 code challenge method.
+ Source File: data/docs\oauth_pkce_spec.md
+ -> PASS: 'trace_decision' traced official policy and source lineage.
+
+[Step 5] Invoking MCP tool 'compare_draft_vs_decision' (Paynova)...
+ Draft Author: Rohan Iyer (2026-02-24)
+ Ratified Decider: Priya Sharma
+ -> PASS: 'compare_draft_vs_decision' surfaced dissenting draft vs policy.
+
+[Step 6] Invoking MCP tool 'impact_analysis' (Paynova)...
+ Impacted Tickets: ['TICK-202', 'TICK-203', 'TICK-201']
+ Blocked Items: ['TICK-202']
+ -> PASS: 'impact_analysis' completed multi-hop dependency traversal.
+
+[Step 7] Testing Action Simulation Safety over MCP (confirm=False)...
+ Proposal Status: proposed_pending_confirmation
+ Confirm Required: True
+ Proposed Ticket Title: Evaluate EU SEPA Webhook Reliability
+ -> PASS: Action simulation returned approval preview without mutating graph.
+
+[Step 8] Testing FalkorDB Read-Only Cypher Query Interface...
+ Team Distribution in FalkorDB:
+   - Core Infrastructure: 1 members
+   - Platform & Auth: 1 members
+   - Billing & Payments: 1 members
+   - Product Operations: 1 members
+ -> PASS: FalkorDB read-only OpenCypher query succeeded.
+
+=================================================================
+ ALL PHASE 6 MCP PROTOCOL & SERVER TESTS PASSED (100%)
+=================================================================
 ```
+
+---
+
 
 
 
