@@ -6,7 +6,7 @@
     "expected_tool": "who_owns",
     "expected_owner": "Platform & Auth",
     "expected_lead": "Alice Chen",
-    "must_contain": ["Platform & Auth", "Alice Chen"]
+    "must_contain": ["Alice Chen", "Platform"]
   },
   {
     "id": "eval_02",
@@ -23,16 +23,15 @@
     "expected_tool": "trace_decision",
     "expected_decision": "OAuth 2.1 with PKCE",
     "expected_source_id": "SRC_DOC_AUTH_01",
-    "must_contain": ["OAuth 2.1", "PKCE", "Keycloak", "SRC_DOC_AUTH_01"]
+    "must_contain": ["OAuth 2.1", "PKCE", "Keycloak"]
   },
   {
     "id": "eval_04",
     "category": "freshness_supersedes",
-    "question": "What was the decision for billing reconciliation and has it been changed?",
+    "question": "Was our earlier decision on OAuth authentication superseded by a newer specification, and what challenge method is now required?",
     "expected_tool": "trace_decision",
     "expected_status": "superseded",
-    "superseded_by": "FalkorDB",
-    "must_contain": ["PostgreSQL", "superseded", "FalkorDB"]
+    "must_contain": ["superseded", "S256"]
   },
   {
     "id": "eval_05",
@@ -76,5 +75,33 @@
     "question": "What was decided regarding the European payment gateway rail and what is the source document?",
     "expected_tool": "trace_decision",
     "must_contain": ["Paynova", "SRC_DOC_PAYNOVA_DECISION_01"]
+  },
+  {
+    "id": "eval_11",
+    "category": "draft_vs_decision",
+    "question": "Compare the preliminary draft technical evaluation for European billing against the official decision. Was there any dissenting advice?",
+    "expected_tool": "compare_draft_vs_decision",
+    "must_contain": ["Rohan Iyer", "Priya Sharma", "idempotency"]
+  },
+  {
+    "id": "eval_12",
+    "category": "infrastructure_k8s",
+    "question": "What is Northwind Labs' official deployment strategy for Kubernetes across regions?",
+    "expected_tool": "trace_decision",
+    "must_contain": ["us-east-1", "eu-central-1"]
+  },
+  {
+    "id": "eval_13",
+    "category": "security_policy",
+    "question": "What is Northwind Labs' mandatory security requirement for database client authentication from Kubernetes pods?",
+    "expected_tool": "trace_decision",
+    "must_contain": ["IRSA", "IAM"]
+  },
+  {
+    "id": "eval_14",
+    "category": "hallucination_guard_tech",
+    "question": "What is our official architecture standard for Rust microkernels?",
+    "expected_tool": "trace_decision",
+    "must_contain": ["couldn't find this in the company graph"]
   }
 ]

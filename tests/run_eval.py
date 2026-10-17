@@ -19,6 +19,13 @@ project_root = str(Path(__file__).resolve().parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
+
+os.environ["LITELLM_LOCAL_MODEL_COST_MAP"] = "True"
+
 from orgmind.agent import OrgMindAgent
 
 

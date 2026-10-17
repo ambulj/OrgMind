@@ -1,80 +1,94 @@
-# OrgMind 3-Minute Hackathon Demo Script
+# OrgMind 3-Minute Hackathon Demo Script & Presentation Guide
 
-> **Goal**: Deliver a tight, compelling 3-minute presentation demonstrating the 4 core competencies of Track 3: Ownership, Decision Provenance, Real-Time Freshness/Superseding, and Simulated Action.
+> **Goal**: Deliver a tight, compelling 3-minute presentation demonstrating the 5 core judging pillars of Track 3:
+> 1. Unified Graph (Docs, Tickets, Chats in FalkorDB)
+> 2. Ownership & Demonstrated Expertise Ranking
+> 3. Decision Lineage & Source Provenance
+> 4. Non-Destructive Freshness (`[:SUPERSEDES]`)
+> 5. Dissenting Draft Analysis & Multi-Hop Impact
 
 ---
 
 ## ⏱️ Timing & Presenter Roles
 
-* **Total Time**: 3 Minutes (180 seconds).
-* **Person A (Graph Architect)**: Introduces the problem, explains the FalkorDB knowledge graph structure, and triggers the live update event.
-* **Person B (Agent Architect)**: Operates the Streamlit UI, narrates the agent's tool reasoning, citations, and actions.
+* **Total Duration**: 3 Minutes (180 seconds).
+* **Person A (Graph Architect)**: Introduces the corporate amnesia problem, highlights FalkorDB graph modeling, triggers the live superseding update, and concludes.
+* **Person B (Agent Architect)**: Operates the Streamlit UI, narrates agent tool execution, demonstrates verified source citations, and highlights multi-hop blocker chains.
 
 ---
 
-## 🎬 4 Demo Moments Walkthrough
+## 🎬 5 Demo Moments Walkthrough
 
-### 0:00 – 0:30 | Hook & Architecture (Person A)
+### 0:00 – 0:35 | Hook & Architecture (Person A)
 * **Spoken Pitch**:
-  > *"Every growing company suffers from corporate amnesia. Critical architecture decisions get buried in random Google Docs, ownership is scattered across Jira, and context gets lost in Slack.  
-  > Meet **OrgMind**, our autonomous Company Brain. We ingested Northwind Labs' docs, tickets, and chats into **FalkorDB** as a single connected knowledge graph. Let's see how OrgMind eliminates knowledge silos."*
-* **Visual**: Show Streamlit UI and the live Pyvis graph visualization in the right panel showing interconnected People, Teams, Projects, and Decisions.
+  > *"Every growing company suffers from corporate amnesia. Critical architecture decisions get buried in random Google Docs, ticket ownership is scattered, and key context vanishes in Slack channels.  
+  > Meet **OrgMind**, our autonomous Company Brain. We ingested Northwind Labs' docs, tickets, and chats into **FalkorDB** as a single connected knowledge graph. With 163 nodes, OpenCypher range indexes, and an autonomous tool-calling agent, OrgMind makes company memory instantly queryable and verifiable."*
+* **Visual**: Show Streamlit interface (`http://localhost:8501`), highlighting the top Demo Control Bar and the interactive Pyvis Knowledge Graph in the right pane.
 
 ---
 
-### 0:30 – 1:15 | Moment A: Ownership & Who-Knows (Person B)
-* **Action**: Click `Moment A` button or type:
-  > *"Who owns the OAuth Upgrade project, and who knows the most about OAuth?"*
+### 0:35 – 1:10 | Moment A: Ownership & Weighted Expertise (Person B)
+* **Action**: Click `Moment A: Ownership & Expertise` on the Demo Control Ribbon.
+* **Agent Query**:
+  > *"Who owns the OAuth Upgrade project, and who has the highest demonstrated knowledge on OAuth?"*
 * **Agent Response**:
   > *"The OAuth 2.1 & Keycloak Migration project (`PRJ_OAUTH_UPGRADE`) is owned by the **Platform & Auth** team, led by **Alice Chen** (`P_ALICE`).  
-  > Based on authorship of specifications and review contributions, **Alice Chen** has the highest demonstrated expertise on OAuth (3 evidence records), followed by **Bob Martinez**."*
+  > Based on weighted graph evidence across architectural specs, tickets, and review contributions, **Alice Chen** ranks #1 with 14.0 evidence points."*
 * **Key Point to Highlight to Judges**:
-  > *"Notice that OrgMind didn't guess. It queried our graph to find the formal owner and ranked experts based on factual authorship evidence."*
+  > *"Notice OrgMind doesn't guess or suffer from near-ties. It evaluated weighted evidence (specs = 3.0 pts, tickets = 2.0 pts, chats = 1.0 pt) directly from the graph to distinguish authoritative leads from casual chat participants."*
 
 ---
 
-### 1:15 – 1:50 | Moment B: Decision Trace with Verbatim Source (Person B)
-* **Action**: Click `Moment B` button or type:
-  > *"What database did we decide to use for billing reconciliation, and what is the exact source?"*
+### 1:10 – 1:45 | Moment B: Decision Lineage & Source Provenance (Person B)
+* **Action**: Click `Moment B: Decision Provenance`.
+* **Agent Query**:
+  > *"What is our official decision on authentication standards, where was it documented, and what source ID supports it?"*
 * **Agent Response**:
-  > *"On 2026-01-20, Bob Martinez and Carol Danvers decided to use **PostgreSQL** for transaction reconciliation [Source: `SRC_DOC_BILL_01`]."*
-* **Visual**: Highlight the right-hand **Verified Sources & Citations** panel. Show the verbatim quote from `data/docs/billing_migration.md`:
-  > *"Database chosen for transaction reconciliation is PostgreSQL."*
+  > *"Northwind Labs officially enforces **OAuth 2.1 with PKCE** backed by Keycloak, strictly requiring S256 code challenge methods (`DEC_AUTH_2026_02`). Documented in `oauth_pkce_spec.md` [Source: `SRC_DOC_PKCE_01`]."*
+* **Visual**: Click over to **Tab 1: Verified Sources** in the right column. Point out the verbatim text chunk and exact file path.
 * **Key Point to Highlight to Judges**:
-  > *"Every single fact is bound to an immutable `Source` node with exact file paths and offsets. Zero hallucinations."*
+  > *"Every single statement is cryptographically anchored to an immutable `Source` node in FalkorDB. If no source exists, the agent deterministically refuses to answer, guaranteeing zero hallucinations."*
 
 ---
 
-### 1:50 – 2:30 | Moment C: Live Freshness & Superseding (Person A & Person B)
-* **Action**: Person A announces an engineering shift:
-  > *"Now imagine our backend team realizes PostgreSQL can't handle complex multi-currency audits, and they decide to switch to FalkorDB today."*
-* **Action**: Click `Moment C: Live Supersede Event`. (This triggers `ingest_live_decision()`, loading `data/live/new_billing_decision.json` into FalkorDB in real time).
-* **Agent Prompt**:
-  > *"What is our current decision on billing reconciliation database, and what did it supersede?"*
+### 1:45 – 2:20 | Moment C: Live Freshness & Superseding (Person A & Person B)
+* **Spoken Pitch (Person A)**:
+  > *"Now imagine an engineering crisis happens live: Paynova's payment gateway starts dropping transactions in Europe, and management issues an emergency reversal decision today."*
+* **Action**: Click `Moment C: Live Superseding`.
+* **What Happens Under the Hood**:
+  - The live pipeline validates `data/live/live_decision_reversal.json`.
+  - Links the new decision (`DEC_PAYMENTS_2026_05_REVERSAL`) to the older decision via `[:SUPERSEDES]`.
+  - Sets `valid_to` timestamp on the superseded decision without deleting it.
 * **Agent Response**:
-  > *"The **current** decision (as of 2026-02-15) is to switch transaction reconciliation to **FalkorDB graph-state** [Source: `SRC_LIVE_DEC_BILLING_02`].  
-  > This **supersedes** the previous decision (`DEC_BILLING_2026_01`) from 2026-01-20, which originally selected PostgreSQL [Source: `SRC_DOC_BILL_01`]."*
+  > *"The current active policy as of 2026-05-30 is to **freeze and reverse Paynova integration** [Source: `SRC_LIVE_REVERSAL_PAYNOVA_01`]. This **superseded** the prior decision from 2026-03-01 (`DEC_PAYMENTS_2026_03_PAYNOVA`) [Source: `SRC_DOC_PAYNOVA_DECISION_01`]."*
 * **Key Point to Highlight to Judges**:
-  > *"We didn't delete the old record! OrgMind preserves corporate lineage by creating a `[:SUPERSEDES]` relationship and marking the old decision superseded. The company brain retains its history."*
+  > *"Zero data destruction. OrgMind preserves complete corporate history and audit trails through graph relationships."*
 
 ---
 
-### 2:30 – 3:00 | Moment D: Simulated Company Action (Person B)
-* **Action**: Click `Moment D` button or type:
-  > *"Draft a message to #backend-eng letting them know about the billing switch to FalkorDB, and create a follow-up ticket."*
+### 2:20 – 2:45 | Moment D: Dissenting Draft vs Ratified Policy (Person B)
+* **Action**: Click `Moment D: Draft vs Decision`.
+* **Agent Query**:
+  > *"Compare the draft technical evaluation for European billing against the official decision. Was there any dissenting advice?"*
 * **Agent Response**:
-  > *"I have completed both actions:  
-  > 1. Drafted message to `#backend-eng`: 'Team: Transaction reconciliation is moving from PostgreSQL to FalkorDB to support multi-currency graph audits.' [Simulated ID: `MSG-SIM-8412`]  
-  > 2. Created ticket in `PRJ_BILLING_STRIPE`: 'Migrate transaction reconciliation store to FalkorDB' [Simulated ID: `TICK-SIM-3921`].  
-  > Both actions are recorded directly into the knowledge graph."*
-* **Closing Sentence (Person A)**:
-  > *"OrgMind isn't just a search engine — it is an active participant that understands company state, traces decisions, and helps teams get work done. Thank you!"*
+  > *"Yes. On 2026-02-24, senior engineer **Rohan Iyer** submitted draft recommendation `DRAFT_PAYNOVA_EVAL` warning that Paynova lacked robust multi-currency idempotency and advising against adoption. However, on 2026-03-01, Priya Sharma ratified policy `DEC_PAYMENTS_2026_03_PAYNOVA` adopting Paynova. The unheeded warning directly foreshadowed incident INC-409."*
+* **Key Point to Highlight to Judges**:
+  > *"OrgMind can surface unheeded technical dissenting drafts, giving leadership complete visibility into decision risk."*
 
 ---
 
-## 🛡️ Emergency Fallback Plan (If Live Demo Glitches)
+### 2:45 – 3:00 | Moment E: Multi-Hop Impact & Actions (Person A & Person B)
+* **Action**: Click `Moment E: Impact & Blocker`.
+* **Agent Response**:
+  > *"Traversed 3 impacted tickets across Billing. Critical finding: `TICK-202` ('Implement Paynova SEPA Direct Debit') is currently **BLOCKED BY** `TICK-201` ('Resolve Paynova webhook signature verification'). Responsible engineer: Rohan Iyer."*
+* **Action Safety Card**: Show the Human-in-the-Loop Action Approval card in the UI before committing simulated tickets or messages.
+* **Closing Pitch (Person A)**:
+  > *"OrgMind isn't just a search engine — it is an autonomous corporate intelligence system that understands ownership, traces decisions, predicts impact, and safeguards institutional knowledge. Thank you!"*
 
-If the local Docker container hangs or LLM API rate limits during the presentation:
-1. **Fallback 1 (Instant Backup Video)**: Switch immediately to the 3-minute pre-recorded screen capture video (`demo_backup.mp4` recorded during Hour 30).
-2. **Fallback 2 (Cached Output Mode)**: The Streamlit app includes pre-cached responses in `st.session_state` if FalkorDB connection drops.
-3. **Fallback 3 (Direct Cypher Display)**: Open FalkorDB Browser at `http://localhost:3000` to show the graph visual directly in Redis.
+---
+
+## 🛡️ Presentation Fallback & Emergency Plan
+
+1. **Fallback 1 (Pre-recorded Backup Video)**: `demo_backup.mp4` ready for instant full-screen playback if network fails.
+2. **Fallback 2 (1-Click Reset)**: Click `🔄 Reset Baseline` on the top ribbon to instantly wipe and restore FalkorDB to its 163-node baseline.
+3. **Fallback 3 (Preflight Verification)**: Run `python scripts/preflight.py` 10 minutes before judging starts to ensure all 6 subsystems are green.

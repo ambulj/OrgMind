@@ -1,18 +1,18 @@
 {
   "model": "ollama/qwen2.5-coder:14b",
-  "timestamp": "2026-10-17T12:36:59Z",
-  "total_tests": 3,
-  "passed_tests": 3,
-  "pass_rate_pct": 100.0,
-  "avg_latency_sec": 65.23,
-  "total_latency_sec": 195.68,
+  "timestamp": "2026-10-17T14:21:32Z",
+  "total_tests": 6,
+  "passed_tests": 5,
+  "pass_rate_pct": 83.3,
+  "avg_latency_sec": 730.44,
+  "total_latency_sec": 4382.63,
   "results": [
     {
       "id": "eval_01",
       "category": "ownership",
       "question": "Who owns the OAuth Upgrade project?",
       "passed": true,
-      "duration_sec": 41.08,
+      "duration_sec": 42.34,
       "expected_tool": "who_owns",
       "tools_used": [
         "who_owns"
@@ -29,7 +29,7 @@
       "category": "who_knows",
       "question": "Who knows the most about OAuth in the company?",
       "passed": true,
-      "duration_sec": 43.3,
+      "duration_sec": 45.8,
       "expected_tool": "who_knows_about",
       "tools_used": [
         "who_knows_about"
@@ -41,14 +41,14 @@
       ],
       "invalid_citations": [],
       "is_grounded": true,
-      "answer_preview": "Based on the information provided by the tool, the person who knows the most about OAuth in the company is Alice Chen [Source: SRC_DOC_AUTH_01]. She is the Principal Architect and has the highest number of evidence counts (5) related to OAuth, includ"
+      "answer_preview": "Based on the information provided by the tool, the person who knows the most about OAuth in the company is Alice Chen [Source: SRC_DOC_AUTH_01]. Alice Chen, as the Principal Architect, has the highest weighted score of 14.0 points, supported by evide"
     },
     {
       "id": "eval_03",
       "category": "decision_trace",
       "question": "What is our official decision on authentication and where was it documented?",
       "passed": true,
-      "duration_sec": 111.3,
+      "duration_sec": 111.51,
       "expected_tool": "trace_decision",
       "tools_used": [
         "trace_decision"
@@ -59,6 +59,63 @@
       "invalid_citations": [],
       "is_grounded": true,
       "answer_preview": "Our official decision on authentication is to reject plain code challenges in authorization requests and enforce the S256 code challenge method [DEC_AUTH_2026_02]. This decision replaced an earlier decision to adopt OAuth 2.1 with PKCE for all web/mo"
+    },
+    {
+      "id": "eval_04",
+      "category": "freshness_supersedes",
+      "question": "Was our earlier decision on OAuth authentication superseded by a newer specification, and what challenge method is now required?",
+      "passed": true,
+      "duration_sec": 73.66,
+      "expected_tool": "trace_decision",
+      "tools_used": [
+        "trace_decision"
+      ],
+      "tool_matched": true,
+      "missing_keywords": [],
+      "valid_citations": [],
+      "invalid_citations": [],
+      "is_grounded": true,
+      "answer_preview": "Yes, our earlier decision on OAuth authentication was superseded by a newer specification. The current decision is:\n\n- **Decision ID**: DEC_AUTH_2026_02\n- **Decision Text**: Reject plain code challenges in authorization requests; enforce S256 code ch"
+    },
+    {
+      "id": "eval_05",
+      "category": "hallucination_guard",
+      "question": "Who owns the Quantum Computing AI Teleporter project?",
+      "passed": true,
+      "duration_sec": 27.39,
+      "expected_tool": "who_owns",
+      "tools_used": [
+        "who_owns"
+      ],
+      "tool_matched": true,
+      "missing_keywords": [],
+      "valid_citations": [],
+      "invalid_citations": [],
+      "is_grounded": true,
+      "answer_preview": "I couldn't find this in the company graph."
+    },
+    {
+      "id": "eval_06",
+      "category": "simulated_action",
+      "question": "Draft a message to #backend-eng about OAuth token expiry and create a ticket.",
+      "passed": false,
+      "duration_sec": 4081.93,
+      "expected_tool": "draft_message",
+      "tools_used": [
+        "draft_message",
+        "create_ticket"
+      ],
+      "tool_matched": true,
+      "missing_keywords": [],
+      "valid_citations": [
+        "SRC_DOC_AUTH_01"
+      ],
+      "invalid_citations": [
+        "SRC_MSG_DRAFT_01",
+        "SRC_TICKET_CREATE_01"
+      ],
+      "is_grounded": false,
+      "answer_preview": "### System:\nYou are OrgMind, the Company Brain AI assistant for Northwind Labs.\nYou have direct access to the Northwind Labs knowledge graph via tools.\n\nCRITICAL OPERATIONAL RULES:\n1. ONLY answer questions using facts returned directly by your tools."
     }
   ]
 }

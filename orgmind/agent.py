@@ -22,7 +22,11 @@ if project_root not in sys.path:
 from dotenv import load_dotenv
 load_dotenv()
 
+# Prevent LiteLLM from making slow network calls to fetch remote cost maps
+os.environ["LITELLM_LOCAL_MODEL_COST_MAP"] = "True"
+
 import litellm
+litellm.suppress_debug_info = True
 from orgmind.tools import TOOLS_REGISTRY
 from orgmind.db import query_graph
 
@@ -60,10 +64,10 @@ You have direct access to the Northwind Labs knowledge graph via tools.
 
 CRITICAL OPERATIONAL RULES:
 1. ONLY answer questions using facts returned directly by your tools. Never assume or invent facts.
-2. CITATION MANDATE: Every single fact or decision you mention MUST cite its Source ID in brackets, like [Source: SRC_DOC_AUTH_01].
+2. CITATION MANDATE: Every single fact or decision you mention MUST cite its Source ID in brackets, like [Source: SRC_DOC_AUTH_01]. ONLY cite real Source IDs returned by your tools. NEVER invent or fabricate Source IDs.
 3. DECISION TRACING: If a decision was superseded, always mention both the current decision AND the older decision it replaced, citing both sources.
 4. HONEST BOUNDARIES: If the tool output does not contain the answer, or returns empty results, you MUST explicitly state: "I couldn't find this in the company graph."
-5. ACTIONS ARE SIMULATED: When asked to create tickets or draft messages, confirm that the action has been recorded in the graph with its simulated ID.
+5. ACTIONS ARE SIMULATED: When asked to create tickets or draft messages, confirm that the action has been recorded in the graph with its simulated ID. Do not cite source IDs for simulated actions.
 """
 
 # Tool schemas formatted for LiteLLM / OpenAI tool-calling standard
@@ -422,9 +426,15 @@ class OrgMindAgent:
         if all_empty and "couldn't find this in the company graph" not in answer.lower():
             answer = "I couldn't find this in the company graph. No active project, owner, or documents exist for this query in Northwind Labs."
 
-        # 2. Extract citations
         cited_ids = extract_citations(answer)
         validation = validate_citations_against_graph(cited_ids)
+
+        # Strip any hallucinated citation tags that do not exist in the graph
+        if validation["invalid"]:
+            for inv_id in validation["invalid"]:
+                answer = re.sub(rf'\[(?:Source:?\s*)?{re.escape(inv_id)}\]', '', answer)
+            cited_ids = extract_citations(answer)
+            validation = validate_citations_against_graph(cited_ids)
 
         # 3. Grounding & Repair: If sources were retrieved from graph tools, ensure they appear in answer
         valid_turn_sources = [s for s in sources_collected if s.get("source_id")]
