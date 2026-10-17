@@ -1,0 +1,5 @@
+id,name,owner_team_id,lead_person_id,status,description
+PRJ_OAUTH_UPGRADE,OAuth 2.1 & Keycloak Migration,T_PLATFORM,P_ALICE,in_progress,Upgrading company-wide auth from legacy sessions to PKCE OAuth 2.1
+PRJ_BILLING_STRIPE,Stripe Billing V2 Integration,T_PAYMENTS,P_BOB,planning,Migrating recurring billing to Stripe Checkout and webhooks
+PRJ_K8S_MIGRATION,Kubernetes Multi-Region Deployment,T_CORE_INFRA,P_DAVID,completed,Moving microservices from ECS to EKS multi-cluster
+PRJ_PORTAL_REDESIGN,Customer Self-Serve Portal,T_PRODUCT,P_FRANK,in_progress,React and Tailwind redesign of customer account settings

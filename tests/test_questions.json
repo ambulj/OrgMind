@@ -1,0 +1,52 @@
+[
+  {
+    "id": "eval_01",
+    "category": "ownership",
+    "question": "Who owns the OAuth Upgrade project?",
+    "expected_tool": "who_owns",
+    "expected_owner": "Platform & Auth",
+    "expected_lead": "Alice Chen",
+    "must_contain": ["Platform & Auth", "Alice Chen"]
+  },
+  {
+    "id": "eval_02",
+    "category": "who_knows",
+    "question": "Who knows the most about OAuth in the company?",
+    "expected_tool": "who_knows_about",
+    "expected_top_person": "Alice Chen",
+    "must_contain": ["Alice Chen"]
+  },
+  {
+    "id": "eval_03",
+    "category": "decision_trace",
+    "question": "What is our official decision on authentication and where was it documented?",
+    "expected_tool": "trace_decision",
+    "expected_decision": "OAuth 2.1 with PKCE",
+    "expected_source_id": "SRC_DOC_AUTH_01",
+    "must_contain": ["OAuth 2.1", "PKCE", "Keycloak", "SRC_DOC_AUTH_01"]
+  },
+  {
+    "id": "eval_04",
+    "category": "freshness_supersedes",
+    "question": "What was the decision for billing reconciliation and has it been changed?",
+    "expected_tool": "trace_decision",
+    "expected_status": "superseded",
+    "superseded_by": "FalkorDB",
+    "must_contain": ["PostgreSQL", "superseded", "FalkorDB"]
+  },
+  {
+    "id": "eval_05",
+    "category": "hallucination_guard",
+    "question": "Who owns the Quantum Computing AI Teleporter project?",
+    "expected_tool": "who_owns",
+    "expected_answer": "I couldn't find this in the company graph.",
+    "must_contain": ["couldn't find this in the company graph"]
+  },
+  {
+    "id": "eval_06",
+    "category": "simulated_action",
+    "question": "Draft a message to #backend-eng about OAuth token expiry and create a ticket.",
+    "expected_tool": "draft_message",
+    "must_contain": ["simulated", "ticket", "#backend-eng"]
+  }
+]

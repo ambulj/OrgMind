@@ -1,0 +1,4 @@
+{"id": "MSG_BE_001", "channel": "#backend-eng", "timestamp": "2026-02-01T11:20:00Z", "author": "@alice", "text": "Reminder for everyone: when building new services, OAuth 2.1 PKCE is now mandatory. Read DOC_AUTH_SPEC for key rotation details."}
+{"id": "MSG_BE_002", "channel": "#backend-eng", "timestamp": "2026-02-01T11:25:00Z", "author": "@bob", "text": "Thanks Alice! I am testing the new Keycloak client with our Python FastAPI gateway. Bob and Carol are meeting at 2pm on billing."}
+{"id": "MSG_BE_003", "channel": "#backend-eng", "timestamp": "2026-02-05T16:00:00Z", "author": "@davidk", "text": "Heads up: Kubernetes 1.30 upgrade is scheduled for this Sunday. Elena has confirmed security policies are in place."}
+{"id": "MSG_BE_004", "channel": "#backend-eng", "timestamp": "2026-02-12T09:40:00Z", "author": "@elena", "text": "Just completed security review of PRJ_OAUTH_UPGRADE. No blocking vulnerabilities found, token expiry at 15 mins approved."}

@@ -1,0 +1,28 @@
+services:
+  # Primary Graph Database Engine
+  falkordb:
+    image: falkordb/falkordb:latest
+    container_name: orgmind_falkordb
+    ports:
+      - "6379:6379"
+      - "3000:3000" # Built-in FalkorDB Browser UI (http://localhost:3000)
+    volumes:
+      - falkordb_data:/data
+    restart: unless-stopped
+
+  # Optional Official FalkorDB MCP Server for schema inspection and read-only queries
+  falkordb-mcp:
+    image: falkordb/mcpserver:latest
+    container_name: orgmind_mcp
+    environment:
+      - FALKORDB_HOST=falkordb
+      - FALKORDB_PORT=6379
+      - FALKORDB_DEFAULT_READONLY=true
+    depends_on:
+      - falkordb
+    restart: unless-stopped
+    profiles:
+      - mcp # Run with 'docker compose --profile mcp up' if using Dockerized MCP
+
+volumes:
+  falkordb_data:

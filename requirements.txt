@@ -1,0 +1,16 @@
+# Core FalkorDB graph client
+falkordb>=1.0.10
+
+# LLM provider abstraction & tool calling
+litellm>=1.40.0
+pydantic>=2.7.0
+
+# User Interface & Visualizations
+streamlit>=1.36.0
+pyvis>=0.3.2
+
+# FastMCP Server (official Anthropic standard)
+mcp>=1.0.0
+
+# Utilities
+python-dotenv>=1.0.1

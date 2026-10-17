@@ -1,0 +1,12 @@
+id,name,email,role,aliases
+P_ALICE,Alice Chen,alice.chen@northwind.io,Principal Architect,"alice,achen,@alice"
+P_BOB,Bob Martinez,bob.m@northwind.io,Tech Lead Backend,"bob,bmartinez,@bob"
+P_CAROL,Carol Danvers,carol.d@northwind.io,Senior Product Manager,"carol,cdanvers,@carol"
+P_DAVID,David Kim,david.k@northwind.io,DevOps Engineer,"david,dkim,@davidk"
+P_ELENA,Elena Rostova,elena.r@northwind.io,Staff Security Engineer,"elena,erostova,@elena"
+P_FRANK,Frank Wright,frank.w@northwind.io,Frontend Lead,"frank,fwright,@frank"
+P_PRIYA,Priya Sharma,priya.s@northwind.io,Payments Engineering Lead,"pri,priya,@pri,@priya"
+P_ROHAN,Rohan Iyer,rohan.i@northwind.io,Senior Backend Engineer,"ro,rohan,@ro,@rohan"
+P_NEHA,Neha Kapoor,neha.k@northwind.io,Payments Product Manager,"neha,@neha,nkapoor"
+P_KARAN,Karan Verma,karan.v@northwind.io,Full-Stack Engineer,"karan,@karan,kverma"
+P_AARAV,Aarav Mehta,aarav.m@northwind.io,Infrastructure & QA Engineer,"aarav,@aarav,amehta"

@@ -1,0 +1,135 @@
+"""Custom OrgMind MCP Server (Python).
+
+Technical Terms:
+- MCP (Model Context Protocol): Standard protocol allowing LLMs and AI apps to discover
+  and call tools, read resources, and access prompts over stdio or SSE.
+- FastMCP: A high-level Python framework for building MCP servers with minimal boilerplate.
+"""
+
+import json
+from typing import Any, Dict
+from mcp.server.fastmcp import FastMCP
+from orgmind.tools import (
+    who_owns as tool_who_owns,
+    who_knows_about as tool_who_knows_about,
+    trace_decision as tool_trace_decision,
+    what_changed_since as tool_what_changed_since,
+    get_source as tool_get_source,
+    find_related as tool_find_related,
+    create_ticket as tool_create_ticket,
+    draft_message as tool_draft_message,
+    assign_task as tool_assign_task,
+)
+
+# Initialize FastMCP Server
+mcp = FastMCP("OrgMind-Company-Brain")
+
+
+@mcp.tool()
+def who_owns(project_or_topic: str) -> str:
+    """Finds who owns a project or topic in Northwind Labs.
+
+    Args:
+        project_or_topic: Name of the project or topic (e.g. 'OAuth', 'Billing').
+    """
+    result = tool_who_owns(project_or_topic)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+def who_knows_about(topic: str) -> str:
+    """Ranks company members by demonstrated knowledge on a topic.
+
+    Args:
+        topic: Topic keyword (e.g. 'OAuth', 'Kubernetes', 'Billing').
+    """
+    result = tool_who_knows_about(topic)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+def trace_decision(topic: str) -> str:
+    """Traces the active decision, previous decisions, and source citations for a topic.
+
+    Args:
+        topic: Topic name (e.g. 'OAuth', 'Billing').
+    """
+    result = tool_trace_decision(topic)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+def what_changed_since(date_str: str) -> str:
+    """Lists all changes (decisions and tickets) since a given date (YYYY-MM-DD).
+
+    Args:
+        date_str: ISO date string, e.g. '2026-02-01'.
+    """
+    result = tool_what_changed_since(date_str)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+def get_source(source_id: str) -> str:
+    """Fetches the exact text snippet for a Source ID to guarantee factual grounding.
+
+    Args:
+        source_id: Identifier of the source chunk, e.g. 'SRC_DOC_AUTH_01'.
+    """
+    result = tool_get_source(source_id)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+def find_related(entity: str, hops: int = 2) -> str:
+    """Finds neighboring nodes connected up to N hops away from an entity.
+
+    Args:
+        entity: Entity name or ID.
+        hops: Number of relationship hops (1-3).
+    """
+    result = tool_find_related(entity, hops)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+def create_ticket(title: str, description: str, project_id: str) -> str:
+    """Simulates creating an issue ticket and links it into the graph.
+
+    Args:
+        title: Title of the ticket.
+        description: Description of the work.
+        project_id: Target project ID.
+    """
+    result = tool_create_ticket(title, description, project_id)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+def draft_message(channel: str, text: str) -> str:
+    """Simulates drafting a message to a team communication channel.
+
+    Args:
+        channel: Channel name, e.g. '#backend-eng'.
+        text: Message draft content.
+    """
+    result = tool_draft_message(channel, text)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+def assign_task(task_title: str, assignee_person_id: str, project_id: str) -> str:
+    """Assigns a project task to a team member in the graph.
+
+    Args:
+        task_title: Title of the assigned task.
+        assignee_person_id: Person ID (e.g. 'P_ALICE').
+        project_id: Target Project ID.
+    """
+    result = tool_assign_task(task_title, assignee_person_id, project_id)
+    return json.dumps(result, indent=2)
+
+
+if __name__ == "__main__":
+    # Runs the MCP server over stdio for Claude Desktop or client connection
+    mcp.run()

@@ -1,0 +1,4 @@
+{"id": "MSG_PROD_001", "channel": "#product-sync", "timestamp": "2026-02-02T15:00:00Z", "author": "@carol", "text": "Who owns the customer self-serve portal redesign? We need to finalize the mockups by Friday."}
+{"id": "MSG_PROD_002", "channel": "#product-sync", "timestamp": "2026-02-02T15:05:00Z", "author": "@frank", "text": "I am leading that under PRJ_PORTAL_REDESIGN! I have mockups ready in Figma for review."}
+{"id": "MSG_PROD_003", "channel": "#product-sync", "timestamp": "2026-02-03T10:15:00Z", "author": "@carol", "text": "Awesome Frank. Also, Bob: are we sticking to PostgreSQL for the Stripe billing reconciliation ledger?"}
+{"id": "MSG_PROD_004", "channel": "#product-sync", "timestamp": "2026-02-03T10:20:00Z", "author": "@bob", "text": "Yes, PostgreSQL with JSONB columns for webhook payloads is the ratified architecture for now."}

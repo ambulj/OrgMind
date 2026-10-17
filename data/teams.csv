@@ -1,0 +1,5 @@
+id,name,lead_id,description
+T_CORE_INFRA,Core Infrastructure,P_DAVID,Manages cloud deployment databases and reliability
+T_PLATFORM,Platform & Auth,P_ALICE,Core identity authentication and architectural standards
+T_PAYMENTS,Billing & Payments,P_BOB,Payment gateways invoicing and subscription lifecycles
+T_PRODUCT,Product Operations,P_CAROL,Product specs roadmap planning and customer workflows

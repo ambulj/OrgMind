@@ -1,0 +1,13 @@
+{
+  "new_decision_id": "DEC_BILLING_2026_02",
+  "topic": "Billing",
+  "text": "Switch transaction reconciliation store from PostgreSQL to FalkorDB graph-state to support multi-currency graph audits.",
+  "decided_by": "P_BOB",
+  "timestamp": "2026-02-15T18:00:00Z",
+  "source": {
+    "source_id": "SRC_LIVE_DEC_BILLING_02",
+    "file_path": "data/live/new_billing_decision.json",
+    "chunk_offset": 0,
+    "snippet": "Decision ratified by Bob Martinez on 2026-02-15: Due to complex multi-currency edge relations, transaction reconciliation will use FalkorDB graph nodes instead of PostgreSQL."
+  }
+}

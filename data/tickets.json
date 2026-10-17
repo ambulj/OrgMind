@@ -1,0 +1,35 @@
+[
+  {
+    "id": "TICK-101",
+    "title": "Deprecate legacy session cookies in favor of JWT",
+    "project_id": "PRJ_OAUTH_UPGRADE",
+    "author_id": "P_ALICE",
+    "assignee_id": "P_BOB",
+    "status": "in_review",
+    "created_at": "2026-02-10T10:00:00Z",
+    "description": "Ensure all backend services accept Bearer JWT tokens issued by Keycloak. Session cookies will be retired by end of Q1.",
+    "topics": ["OAuth", "Security", "Authentication"]
+  },
+  {
+    "id": "TICK-102",
+    "title": "Implement Stripe webhook retry handling with idempotency keys",
+    "project_id": "PRJ_BILLING_STRIPE",
+    "author_id": "P_BOB",
+    "assignee_id": "P_BOB",
+    "status": "open",
+    "created_at": "2026-02-14T14:30:00Z",
+    "description": "Payment events from Stripe occasionally fail due to timeout. We must persist idempotency keys in Redis/FalkorDB to avoid double billing.",
+    "topics": ["Billing", "Stripe", "FalkorDB"]
+  },
+  {
+    "id": "TICK-103",
+    "title": "Audit database access permissions for production clusters",
+    "project_id": "PRJ_K8S_MIGRATION",
+    "author_id": "P_ELENA",
+    "assignee_id": "P_DAVID",
+    "status": "resolved",
+    "created_at": "2026-02-18T09:15:00Z",
+    "description": "Elena verified that only IAM-authenticated pods in Kubernetes can connect to production data stores.",
+    "topics": ["Security", "Kubernetes", "Database"]
+  }
+]
