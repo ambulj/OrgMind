@@ -36,3 +36,7 @@
 ### Phase 7: Automated Preflight & Rehearsal Readiness
 - **Goal**: Automated 6-point preflight verification suite and 3-minute presentation plan.
 - **Status**: Complete ✓ (`391fabc`)
+
+### Phase 8: Demo Rehearsal, Backup Video & Submission Package
+- **Goal**: Full presentation run-through, emergency backup screen recording (`demo_backup.mp4`), and final submission assembly.
+- **Status**: In Progress ◆ (Plan: `.planning/phases/08-demo-rehearsal/08-PLAN.md`)
