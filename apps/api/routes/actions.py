@@ -94,7 +94,12 @@ def confirm_action(
     # Execute tool with confirm=True
     tool_fn = TOOLS_REGISTRY.get(action_record.action_type)
     saved_payload = json.loads(action_record.payload)
-    exec_params = dict(saved_payload.get("proposed_ticket") or saved_payload.get("proposed_message") or saved_payload.get("proposed_assignment") or {})
+    exec_params = dict(
+        saved_payload.get("proposed_ticket")
+        or saved_payload.get("proposed_message")
+        or saved_payload.get("proposed_assignment")
+        or {}
+    )
     exec_params["confirm"] = True
     exec_params["workspace_id"] = ctx.workspace_id
 

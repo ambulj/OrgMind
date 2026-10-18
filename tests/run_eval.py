@@ -68,9 +68,13 @@ def run_evaluation(
         expected_tool = t.get("expected_tool")
         must_contain = t.get("must_contain", [])
 
+        as_of = t.get("as_of")
+        caller_role = t.get("caller_role", "Viewer")
+        agent.caller_role = caller_role
+
         print(f'[{idx}/{len(tests)}] [{q_id}] ({category}) Q: "{q}"', flush=True)
         t_start = time.perf_counter()
-        agent_res = agent.run(q)
+        agent_res = agent.run(q, as_of=as_of)
         duration = round(time.perf_counter() - t_start, 2)
         total_latency += duration
 
@@ -82,8 +86,15 @@ def run_evaluation(
         invalid_citations = citations.get("invalid", [])
         is_grounded = agent_res.get("grounded", True)
 
-        # 1. Check keyword presence
-        mismatches = [sub for sub in must_contain if sub.lower() not in answer.lower()]
+        # 1. Check keyword presence (supports both exact strings and [A, B] OR choices)
+        mismatches = []
+        for sub in must_contain:
+            if isinstance(sub, list):
+                if not any(item.lower() in answer.lower() for item in sub):
+                    mismatches.append(f"({' OR '.join(sub)})")
+            else:
+                if sub.lower() not in answer.lower():
+                    mismatches.append(sub)
 
         # 2. Tool alignment check
         tool_match = (expected_tool in tools_used) if expected_tool else True

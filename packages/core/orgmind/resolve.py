@@ -178,14 +178,16 @@ class EntityResolver:
             seen_pids.add(pid)
             ratio = round(difflib.SequenceMatcher(None, clean, m).ratio(), 2)
             person = self.id_to_person.get(pid, {})
-            results.append({
-                "raw_mention": raw_mention,
-                "matched_alias": m,
-                "suggested_id": pid,
-                "suggested_name": person.get("name", "Unknown"),
-                "similarity_score": ratio,
-                "review_action": "requires_human_approval",
-            })
+            results.append(
+                {
+                    "raw_mention": raw_mention,
+                    "matched_alias": m,
+                    "suggested_id": pid,
+                    "suggested_name": person.get("name", "Unknown"),
+                    "similarity_score": ratio,
+                    "review_action": "requires_human_approval",
+                }
+            )
         return results
 
     def get_person_details(self, person_id: str) -> dict[str, str] | None:

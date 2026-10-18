@@ -198,5 +198,9 @@ def test_idempotent_migration() -> None:
     nodes_after = g.query("MATCH (n) RETURN count(n) AS cnt").result_set[0][0]
     edges_after = g.query("MATCH ()-[r]->() RETURN count(r) AS cnt").result_set[0][0]
 
-    assert nodes_after == nodes_before, f"Node count changed: before={nodes_before}, after={nodes_after}"
-    assert edges_after == edges_before, f"Edge count changed: before={edges_before}, after={edges_after}"
+    assert nodes_after == nodes_before, (
+        f"Node count changed: before={nodes_before}, after={nodes_after}"
+    )
+    assert edges_after == edges_before, (
+        f"Edge count changed: before={edges_before}, after={edges_after}"
+    )

@@ -150,9 +150,13 @@ class IngestionJob(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     workspace_id = Column(String(36), ForeignKey("workspaces.id"), nullable=False, index=True)
-    connector_type = Column(String(100), nullable=False)  # file_upload | sample_data | watched_folder
+    connector_type = Column(
+        String(100), nullable=False
+    )  # file_upload | sample_data | watched_folder
     source_uri = Column(String(500), nullable=False)
-    status = Column(String(50), default="pending", nullable=False)  # pending | running | completed | failed
+    status = Column(
+        String(50), default="pending", nullable=False
+    )  # pending | running | completed | failed
     items_processed = Column(Integer, default=0, nullable=False)
     items_failed = Column(Integer, default=0, nullable=False)
     error_message = Column(Text, nullable=True)
@@ -167,8 +171,12 @@ class ReviewItem(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     workspace_id = Column(String(36), ForeignKey("workspaces.id"), nullable=False, index=True)
-    item_type = Column(String(100), nullable=False)  # unknown_person | decision_reversal | low_confidence
-    status = Column(String(50), default="pending", nullable=False)  # pending | approved | rejected | edited
+    item_type = Column(
+        String(100), nullable=False
+    )  # unknown_person | decision_reversal | low_confidence
+    status = Column(
+        String(50), default="pending", nullable=False
+    )  # pending | approved | rejected | edited
     summary = Column(Text, nullable=False)
     payload = Column(Text, default="{}", nullable=False)  # JSON payload
     before_diff = Column(Text, nullable=True)
@@ -186,7 +194,9 @@ class ProposedAction(Base):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     workspace_id = Column(String(36), ForeignKey("workspaces.id"), nullable=False, index=True)
     action_type = Column(String(100), nullable=False)  # create_ticket | draft_message | assign_task
-    status = Column(String(50), default="proposed", nullable=False)  # proposed | confirmed | cancelled
+    status = Column(
+        String(50), default="proposed", nullable=False
+    )  # proposed | confirmed | cancelled
     payload = Column(Text, default="{}", nullable=False)  # JSON payload
     proposed_by = Column(String(100), nullable=False)
     confirmed_by = Column(String(100), nullable=True)

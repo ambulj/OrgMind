@@ -15,7 +15,9 @@ router = APIRouter(prefix="/audit", tags=["Audit & Governance"])
 def query_audit_logs(
     actor: str | None = Query(None, description="Filter by actor email or id"),
     action: str | None = Query(None, description="Filter by action name"),
-    entity_type: str | None = Query(None, description="Filter by entity type (Decision, Source, Action)"),
+    entity_type: str | None = Query(
+        None, description="Filter by entity type (Decision, Source, Action)"
+    ),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     ctx: WorkspaceContext = Depends(require_role(Role.AUDITOR)),

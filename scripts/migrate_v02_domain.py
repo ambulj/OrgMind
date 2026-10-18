@@ -51,13 +51,18 @@ def migrate_domain_v02(graph_name: str = "northwind_labs") -> dict[str, Any]:
             d.extracted_by = 'manual',
             d.extraction_run_id = 'run_v02_migration'
         """
-        graph.query(update_cypher, {
-            "id": did,
-            "valid_from": v_from,
-            "valid_to": v_to,
-            "now": now_iso,
-        })
-    print(f"[Migrate] Updated {len(decisions)} Decision nodes with bitemporal & confidence metadata.")
+        graph.query(
+            update_cypher,
+            {
+                "id": did,
+                "valid_from": v_from,
+                "valid_to": v_to,
+                "now": now_iso,
+            },
+        )
+    print(
+        f"[Migrate] Updated {len(decisions)} Decision nodes with bitemporal & confidence metadata."
+    )
 
     # 2. Migrate Source Nodes
     sources = query_graph(
@@ -95,15 +100,20 @@ def migrate_domain_v02(graph_name: str = "northwind_labs") -> dict[str, Any]:
             s.valid_to = '',
             s.recorded_at = $now
         """
-        graph.query(update_src_cypher, {
-            "id": sid,
-            "content_hash": content_hash,
-            "uri": f"file://{fp}" if fp and not fp.startswith("http") else fp,
-            "origin_type": origin_type,
-            "created_at": created_at,
-            "now": now_iso,
-        })
-    print(f"[Migrate] Updated {len(sources)} Source nodes with SHA-256 hashes, visibility ACLs, and redaction flags.")
+        graph.query(
+            update_src_cypher,
+            {
+                "id": sid,
+                "content_hash": content_hash,
+                "uri": f"file://{fp}" if fp and not fp.startswith("http") else fp,
+                "origin_type": origin_type,
+                "created_at": created_at,
+                "now": now_iso,
+            },
+        )
+    print(
+        f"[Migrate] Updated {len(sources)} Source nodes with SHA-256 hashes, visibility ACLs, and redaction flags."
+    )
 
     # 3. Migrate OWNS Relationships
     owners_res = graph.query("""
@@ -127,16 +137,21 @@ def migrate_domain_v02(graph_name: str = "northwind_labs") -> dict[str, Any]:
                 r.recorded_at = $now,
                 r.status = $status
             """
-            graph.query(update_owns_cypher, {
-                "a_id": a_id,
-                "b_id": b_id,
-                "valid_from": v_from,
-                "valid_to": v_to,
-                "now": now_iso,
-                "status": status,
-            })
+            graph.query(
+                update_owns_cypher,
+                {
+                    "a_id": a_id,
+                    "b_id": b_id,
+                    "valid_from": v_from,
+                    "valid_to": v_to,
+                    "now": now_iso,
+                    "status": status,
+                },
+            )
             owns_count += 1
-    print(f"[Migrate] Updated {owns_count} OWNS relationships with bitemporal validity and tenure status.")
+    print(
+        f"[Migrate] Updated {owns_count} OWNS relationships with bitemporal validity and tenure status."
+    )
 
     # 4. Initialize New Range Indexes
     new_indexes = [
@@ -163,6 +178,7 @@ def migrate_domain_v02(graph_name: str = "northwind_labs") -> dict[str, Any]:
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser(description="OrgMind Domain Model v0.2 Migration")
     parser.add_argument("--graph", default="northwind_labs", help="Target graph partition")
     args = parser.parse_args()

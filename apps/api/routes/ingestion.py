@@ -96,11 +96,7 @@ def get_ingestion_job(
     session: Session = Depends(get_db_session),
 ) -> IngestionJobResponse:
     """Retrieves status and error logs for an ingestion job."""
-    job = (
-        session.query(IngestionJob)
-        .filter_by(id=job_id, workspace_id=ctx.workspace_id)
-        .first()
-    )
+    job = session.query(IngestionJob).filter_by(id=job_id, workspace_id=ctx.workspace_id).first()
     if not job:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -145,9 +145,12 @@ def export_openapi_json(output_path: str = "docs/openapi.json") -> str:
 
 if __name__ == "__main__":
     import uvicorn
+
     # If run directly with --export-openapi
     if "--export-openapi" in sys.argv:
         p = export_openapi_json()
         print(f"[OpenAPI] Exported OpenAPI schema to {p}")
     else:
-        uvicorn.run("apps.api.main:app", host=settings.API_HOST, port=settings.API_PORT, reload=True)
+        uvicorn.run(
+            "apps.api.main:app", host=settings.API_HOST, port=settings.API_PORT, reload=True
+        )

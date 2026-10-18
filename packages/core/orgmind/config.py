@@ -40,6 +40,7 @@ class Settings(BaseSettings):
 
     # LLM Model Configuration
     LLM_MODEL: str = "ollama/qwen2.5-coder:14b"
+    LLM_FALLBACK_MODEL: str | None = "ollama/qwen2.5-coder:14b"
     OPENAI_API_KEY: str | None = None
     ANTHROPIC_API_KEY: str | None = None
     GEMINI_API_KEY: str | None = None

@@ -16,7 +16,9 @@ router = APIRouter(prefix="/reviews", tags=["Review Queue"])
 
 @router.get("", response_model=PaginatedResponse[ReviewItemResponse])
 def list_review_items(
-    status_filter: str | None = Query("pending", description="Filter by status (pending | approved | rejected | all)"),
+    status_filter: str | None = Query(
+        "pending", description="Filter by status (pending | approved | rejected | all)"
+    ),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     ctx: WorkspaceContext = Depends(get_workspace_context),
@@ -76,11 +78,7 @@ def act_on_review_item(
     session: Session = Depends(get_db_session),
 ) -> ReviewItemResponse:
     """Applies human approval, edit, or rejection to a queued review item. Requires Editor or Admin role."""
-    item = (
-        session.query(ReviewItem)
-        .filter_by(id=item_id, workspace_id=ctx.workspace_id)
-        .first()
-    )
+    item = session.query(ReviewItem).filter_by(id=item_id, workspace_id=ctx.workspace_id).first()
     if not item:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -94,7 +92,9 @@ def act_on_review_item(
             detail="Action must be one of: 'approve', 'reject', 'edit'.",
         )
 
-    item.status = "approved" if action == "approve" else ("rejected" if action == "reject" else "edited")
+    item.status = (
+        "approved" if action == "approve" else ("rejected" if action == "reject" else "edited")
+    )
     item.reviewed_by = ctx.user_email
     item.reviewed_at = datetime.now(UTC)
 

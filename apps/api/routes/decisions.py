@@ -45,26 +45,32 @@ def get_decision_lineage(
     row = rows[0]
     source_anchors = []
     if row.get("source_id"):
-        source_anchors.append({
-            "source_id": row["source_id"],
-            "file_path": row.get("source_file"),
-            "content_hash": row.get("source_hash"),
-        })
+        source_anchors.append(
+            {
+                "source_id": row["source_id"],
+                "file_path": row.get("source_file"),
+                "content_hash": row.get("source_hash"),
+            }
+        )
 
     # Build lineage chain
     lineage_chain = []
     if row.get("supersedes_id"):
-        lineage_chain.append({
-            "relation": "supersedes",
-            "decision_id": row["supersedes_id"],
-            "text": row.get("supersedes_text"),
-        })
+        lineage_chain.append(
+            {
+                "relation": "supersedes",
+                "decision_id": row["supersedes_id"],
+                "text": row.get("supersedes_text"),
+            }
+        )
     if row.get("superseded_by_id"):
-        lineage_chain.append({
-            "relation": "superseded_by",
-            "decision_id": row["superseded_by_id"],
-            "text": row.get("superseded_by_text"),
-        })
+        lineage_chain.append(
+            {
+                "relation": "superseded_by",
+                "decision_id": row["superseded_by_id"],
+                "text": row.get("superseded_by_text"),
+            }
+        )
 
     return DecisionLineageResponse(
         decision_id=row["id"],

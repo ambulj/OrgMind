@@ -176,6 +176,7 @@ def test_graph_neighborhood_and_path(client: TestClient, viewer_token: str):
 def test_source_permission_enforcement(client: TestClient, viewer_token: str, admin_token: str):
     """Tests that restricted sources are blocked for Viewers and accessible for Admins."""
     from orgmind.db import get_graph
+
     graph = get_graph()
     graph.query(
         "MERGE (s:Source {id: 'SRC_RESTRICTED_CONFIDENTIAL_01'}) "

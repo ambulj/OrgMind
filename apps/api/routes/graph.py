@@ -80,12 +80,14 @@ def get_graph_neighborhood(
         edge_key = (src, dst, rel_type)
         if edge_key not in seen_edges:
             seen_edges.add(edge_key)
-            edges.append({
-                "source": src,
-                "target": dst,
-                "type": rel_type,
-                "properties": r.get("rel_props") or {},
-            })
+            edges.append(
+                {
+                    "source": src,
+                    "target": dst,
+                    "type": rel_type,
+                    "properties": r.get("rel_props") or {},
+                }
+            )
 
     return NeighborhoodResponse(
         center_id=center_id,
@@ -113,7 +115,9 @@ def get_graph_path(
       AND (b.id = $to OR toLower(b.name) = toLower($to))
     RETURN shortestPath((a)-[*..5]->(b)) AS p
     """
-    rows = query_graph(cypher_forward, {"from": f_clean, "to": t_clean}, workspace_id=ctx.workspace_id)
+    rows = query_graph(
+        cypher_forward, {"from": f_clean, "to": t_clean}, workspace_id=ctx.workspace_id
+    )
     path_obj = rows[0].get("p") if rows else None
 
     # Try reverse directed shortestPath to -> from if forward not found
@@ -124,7 +128,9 @@ def get_graph_path(
           AND (b.id = $to OR toLower(b.name) = toLower($to))
         RETURN shortestPath((b)-[*..5]->(a)) AS p
         """
-        rows = query_graph(cypher_reverse, {"from": f_clean, "to": t_clean}, workspace_id=ctx.workspace_id)
+        rows = query_graph(
+            cypher_reverse, {"from": f_clean, "to": t_clean}, workspace_id=ctx.workspace_id
+        )
         path_obj = rows[0].get("p") if rows else None
 
     if not path_obj:
@@ -142,19 +148,26 @@ def get_graph_path(
     for n in path_obj.nodes():
         props = getattr(n, "properties", {})
         lbl = getattr(n, "labels", ["Entity"])
-        path_nodes.append({
-            "id": props.get("id", str(getattr(n, "id", ""))),
-            "name": props.get("name") or props.get("title") or props.get("topic") or props.get("id"),
-            "type": lbl[0] if lbl else "Entity",
-            "properties": props,
-        })
+        path_nodes.append(
+            {
+                "id": props.get("id", str(getattr(n, "id", ""))),
+                "name": props.get("name")
+                or props.get("title")
+                or props.get("topic")
+                or props.get("id"),
+                "type": lbl[0] if lbl else "Entity",
+                "properties": props,
+            }
+        )
 
     path_edges = []
     for e in path_obj.edges():
-        path_edges.append({
-            "type": getattr(e, "relation", "RELATED"),
-            "properties": getattr(e, "properties", {}),
-        })
+        path_edges.append(
+            {
+                "type": getattr(e, "relation", "RELATED"),
+                "properties": getattr(e, "properties", {}),
+            }
+        )
 
     return PathResponse(
         from_entity=f_clean,

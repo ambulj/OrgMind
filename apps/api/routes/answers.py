@@ -21,9 +21,7 @@ def get_answer_trace(
 ) -> AnswerTraceResponse:
     """Retrieves full execution trace, tool invocations, and grounding verification for an answer."""
     trace = (
-        session.query(AnswerTrace)
-        .filter_by(id=answer_id, workspace_id=ctx.workspace_id)
-        .first()
+        session.query(AnswerTrace).filter_by(id=answer_id, workspace_id=ctx.workspace_id).first()
     )
     if not trace:
         raise HTTPException(
@@ -67,9 +65,7 @@ def submit_answer_feedback(
 ) -> FeedbackResponse:
     """Submits a user rating (+1 or -1) and optional qualitative feedback on an answer."""
     trace = (
-        session.query(AnswerTrace)
-        .filter_by(id=answer_id, workspace_id=ctx.workspace_id)
-        .first()
+        session.query(AnswerTrace).filter_by(id=answer_id, workspace_id=ctx.workspace_id).first()
     )
     if not trace:
         raise HTTPException(

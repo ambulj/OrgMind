@@ -100,7 +100,9 @@ def get_entity_detail(
     """
     rows = query_graph(cypher, {"id": entity_id}, workspace_id=ctx.workspace_id)
     if not rows:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Entity '{entity_id}' not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Entity '{entity_id}' not found."
+        )
 
     row = rows[0]
     entity_summary = EntitySummary(

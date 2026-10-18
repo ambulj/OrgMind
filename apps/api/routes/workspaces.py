@@ -87,7 +87,11 @@ def list_workspace_members(
     session: Session = Depends(get_db_session),
 ) -> list[MembershipResponse]:
     """Lists all members and their assigned RBAC roles for a given workspace."""
-    ws = session.query(Workspace).filter((Workspace.id == workspace_id) | (Workspace.slug == workspace_id)).first()
+    ws = (
+        session.query(Workspace)
+        .filter((Workspace.id == workspace_id) | (Workspace.slug == workspace_id))
+        .first()
+    )
     if not ws:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found.")
 
@@ -115,13 +119,19 @@ def add_or_update_member(
     session: Session = Depends(get_db_session),
 ) -> MembershipResponse:
     """Adds a member to the workspace or updates their existing role. Admin role required."""
-    ws = session.query(Workspace).filter((Workspace.id == workspace_id) | (Workspace.slug == workspace_id)).first()
+    ws = (
+        session.query(Workspace)
+        .filter((Workspace.id == workspace_id) | (Workspace.slug == workspace_id))
+        .first()
+    )
     if not ws:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found.")
 
     target_user = session.query(User).filter_by(email=payload.user_email.strip()).first()
     if not target_user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User '{payload.user_email}' not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"User '{payload.user_email}' not found."
+        )
 
     valid_roles = [r.value for r in Role]
     if payload.role not in valid_roles:
@@ -131,9 +141,7 @@ def add_or_update_member(
         )
 
     membership = (
-        session.query(Membership)
-        .filter_by(user_id=target_user.id, workspace_id=ws.id)
-        .first()
+        session.query(Membership).filter_by(user_id=target_user.id, workspace_id=ws.id).first()
     )
     if membership:
         membership.role = payload.role

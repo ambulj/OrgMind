@@ -91,9 +91,7 @@ def get_workspace_context(
 
     # Determine user's membership role in this workspace
     membership = (
-        session.query(Membership)
-        .filter_by(user_id=user.id, workspace_id=workspace.id)
-        .first()
+        session.query(Membership).filter_by(user_id=user.id, workspace_id=workspace.id).first()
     )
     role_val = membership.role if membership else payload_role
 
@@ -105,9 +103,9 @@ def get_workspace_context(
 
     req_id = f"req_{uuid.uuid4().hex[:8]}"
     return WorkspaceContext(
-        user_id=user.id,
-        user_email=user.email,
-        workspace_id=workspace.slug,
+        user_id=str(user.id),
+        user_email=str(user.email),
+        workspace_id=str(workspace.slug),
         role=role_enum,
         request_id=req_id,
     )
