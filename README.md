@@ -101,6 +101,163 @@ OrgMind is structured as a clean, enterprise monorepo:
 
 ---
 
+## 🏆 Hackathon Submission Metadata
+
+- **Public Source-Code Repository**: [https://github.com/ambulj/OrgMind](https://github.com/ambulj/OrgMind)
+- **Track**: **Track 3: Graph RAG, Autonomous Agents & Enterprise Knowledge Graphs**
+- **Demo Video**: [OrgMind 3-Minute Presentation Walkthrough](https://github.com/ambulj/OrgMind#demo-video) (Script and moment timestamps: [`docs/DEMO_PLAN.md`](docs/DEMO_PLAN.md))
+- **Deployment Mode**: Full local setup instructions via Docker Compose (`docker compose --profile fullstack up`) or developer CLI (`make setup && make dev-api`).
+
+---
+
+## 📊 Graph Data Model
+
+OrgMind models organizational memory inside **FalkorDB** as a property graph with 10 first-class node types and 12 directed relationship types.
+
+```mermaid
+graph TD
+    Person["Person<br/>(id, name, role, email)"]
+    Team["Team<br/>(id, name)"]
+    Project["Project<br/>(id, name, status)"]
+    Decision["Decision<br/>(id, text, topic, status,<br/>valid_from, valid_to, confidence)"]
+    Draft["DraftRecommendation<br/>(id, topic, recommendation, date)"]
+    Source["Source<br/>(id, file_path, text_snippet,<br/>content_hash, visibility, redacted)"]
+    Ticket["Ticket<br/>(id, title, status, priority)"]
+    Doc["Document<br/>(id, path, title)"]
+    Topic["Topic<br/>(name)"]
+    Msg["Message<br/>(id, channel, content, timestamp)"]
+
+    Person -->|MEMBER_OF| Team
+    Person -->|LEADS| Team
+    Person -->|OWNS {valid_from, valid_to, status}| Project
+    Team -->|OWNS {valid_from, valid_to, status}| Project
+    Person -->|DECIDED_BY| Decision
+    Person -->|AUTHORED| Draft
+    Person -->|AUTHORED| Ticket
+    Person -->|AUTHORED| Msg
+    Person -->|ASSIGNED_TO| Ticket
+
+    Decision -->|DERIVED_FROM| Source
+    Decision -->|ABOUT| Topic
+    Decision -->|SUPERSEDES {superseded_at}| Decision
+    Draft -->|DERIVED_FROM| Source
+    Draft -->|ABOUT| Topic
+    Doc -->|CONTAINS_DRAFT| Draft
+
+    Ticket -->|ABOUT| Topic
+    Ticket -->|PART_OF| Project
+    Ticket -->|BLOCKED_BY| Ticket
+    Ticket -->|DEPENDS_ON| Project
+    Msg -->|ABOUT| Topic
+```
+
+### Key Schema Properties & Bitemporality
+
+| Entity / Rel | Key Properties | Bitemporal / Governance Rules |
+| :--- | :--- | :--- |
+| **`(:Decision)`** | `id`, `text`, `topic`, `status`, `valid_from`, `valid_to`, `recorded_at`, `confidence`, `review_status` | Status is `'current'` or `'superseded'`. `valid_from`/`valid_to` track real-world policy validity, while `recorded_at` tracks system ingestion time. |
+| **`(:Source)`** | `id`, `file_path`, `chunk_offset`, `text_snippet`, `content_hash`, `visibility`, `redacted`, `redacted_at` | Anchored by SHA-256 `content_hash`. Non-destructive redactions use tombstones (`redacted=true`) keeping topology. |
+| **`(:Person)`** | `id`, `name`, `role`, `email`, `handle` | Resolved via exact handles and fuzzy aliases (`resolve.py`). Unknown actors are queued for review; never auto-created as phantom nodes. |
+| **`[r:OWNS]`** | `valid_from`, `valid_to`, `recorded_at`, `status` | Bitemporal ownership tenure. Previous owners transition to `status='previous'` with `valid_to` stamped upon handoff. |
+| **`[r:SUPERSEDES]`** | `superseded_at` | Created strictly when a newer decision replaces an older one on the same topic (`old.valid_from < timestamp`). |
+
+---
+
+## ⚡ Core Cypher Queries & Graph Algorithms
+
+OrgMind executes parameterized OpenCypher queries against FalkorDB with zero raw Cypher exposed to users.
+
+### 1. Bitemporal Ownership Query (with Point-in-Time `as_of` Filtering)
+Finds active or historical project owners based on real-world validity intervals:
+```cypher
+MATCH (owner)-[r:OWNS]->(target)
+WHERE target.id = $project_id OR target.name = $project_name
+RETURN owner.id AS owner_id,
+       owner.name AS owner_name,
+       labels(owner)[0] AS owner_type,
+       r.status AS status,
+       r.valid_from AS valid_from,
+       r.valid_to AS valid_to
+ORDER BY r.valid_from DESC
+```
+
+### 2. Weighted Domain Knowledge Scoring Graph Aggregation
+Computes dynamic expertise rankings across technical specifications, decisions, tickets, and chat communications:
+```cypher
+MATCH (p:Person)-[:AUTHORED]->(item)-[:MENTIONS|ABOUT]->(top:Topic {name: $topic})
+OPTIONAL MATCH (item)-[:DERIVED_FROM]->(src:Source)
+WHERE src IS NULL OR (NOT src.redacted AND (src.visibility = 'all' OR src.visibility CONTAINS ('"' + $caller_role + '"') OR $caller_role = 'Admin'))
+RETURN p.id AS person_id,
+       p.name AS person_name,
+       p.role AS role,
+       labels(item)[0] AS item_type,
+       item.id AS item_id
+UNION
+MATCH (p:Person)-[:ASSIGNED_TO]->(tk:Ticket)-[:ABOUT]->(top:Topic {name: $topic})
+RETURN p.id AS person_id, p.name AS person_name, p.role AS role, 'AssignedTicket' AS item_type, tk.id AS item_id
+```
+*Algorithm*: Scores: Architecture Specs/Decisions = 3.0 pts, Authored Tickets = 2.0 pts, Assigned Tickets = 1.5 pts, Chat Evidence = 1.0 pt.
+
+### 3. Multi-Hop Dynamic Impact & Blocker Traversal
+Traverses graph dependencies to determine every ticket and project impacted when a decision is reversed or superseded:
+```cypher
+MATCH (d:Decision)-[:ABOUT]->(top:Topic {name: $topic})
+OPTIONAL MATCH (tk:Ticket)-[:ABOUT]->(top)
+OPTIONAL MATCH (tk)-[:BLOCKED_BY*1..3]->(blocked_tk:Ticket)
+OPTIONAL MATCH (tk)-[:PART_OF|DEPENDS_ON]->(prj:Project)
+RETURN d.id AS decision_id,
+       collect(DISTINCT tk.id) AS directly_affected_tickets,
+       collect(DISTINCT blocked_tk.id) AS downstream_blocked_tickets,
+       collect(DISTINCT prj.name) AS affected_projects
+```
+
+### 4. Non-Destructive Decision Supersession Mutation
+Safely marks old decisions as superseded and links them to replacement policies with date guards:
+```cypher
+OPTIONAL MATCH (old:Decision)
+WHERE (($supersedes_id IS NOT NULL AND old.id = $supersedes_id)
+   OR ($supersedes_id IS NULL AND (toLower(old.topic) = toLower($topic) OR (old)-[:ABOUT]->(:Topic {name: $topic}))
+       AND old.id <> $decision_id AND (old.valid_from IS NULL OR old.valid_from < $timestamp)))
+  AND old.status = 'current'
+SET old.status = "superseded", old.valid_to = $timestamp
+
+MERGE (src:Source {id: $source_id})
+SET src.file_path = $source_file, src.text_snippet = $source_snippet, src.content_hash = $content_hash,
+    src.visibility = '["all"]', src.redacted = false, src.valid_from = $timestamp
+
+MERGE (new:Decision {id: $decision_id})
+SET new.topic = $topic, new.text = $text, new.status = "current", new.valid_from = $timestamp,
+    new.confidence = 1.0, new.confidence_tier = "High", new.review_status = "approved"
+
+MERGE (new)-[:DERIVED_FROM]->(src)
+MERGE (top:Topic {name: $topic})
+MERGE (new)-[:ABOUT]->(top)
+
+FOREACH (_ IN CASE WHEN old IS NOT NULL THEN [1] ELSE [] END |
+    CREATE (new)-[:SUPERSEDES {superseded_at: $timestamp}]->(old)
+)
+```
+
+### 5. Permission-Aware Citation & Neighborhood Traversal
+Explores up to $N$ hops around an entity while preventing data leakage of confidential or redacted sources:
+```cypher
+MATCH (start)
+WHERE start.id = $entity OR toLower(start.name) = toLower($entity)
+MATCH path = (start)-[*1..2]-(neighbor)
+WHERE labels(neighbor)[0] <> 'Source' OR (
+    NOT coalesce(neighbor.redacted, false) AND 
+    (neighbor.visibility = 'all' OR neighbor.visibility = '["all"]' OR neighbor.visibility CONTAINS ('"' + $caller_role + '"') OR $caller_role = 'Admin')
+)
+RETURN DISTINCT labels(neighbor)[0] AS neighbor_type,
+                neighbor.id AS neighbor_id,
+                coalesce(neighbor.name, neighbor.title, neighbor.text, neighbor.id) AS label,
+                neighbor.status AS status,
+                length(path) AS distance
+LIMIT 60
+```
+
+---
+
 ## 🚀 Quick Start
 
 ### 1. Prerequisites

@@ -47,7 +47,7 @@
   > *"Northwind Labs officially enforces **OAuth 2.1 with PKCE** backed by Keycloak, strictly requiring S256 code challenge methods (`DEC_AUTH_2026_02`). Documented in `oauth_pkce_spec.md` [Source: `SRC_DOC_PKCE_01`]."*
 * **Visual**: Click over to **Tab 1: Verified Sources** in the right column. Point out the verbatim text chunk and exact file path.
 * **Key Point to Highlight to Judges**:
-  > *"Every single statement is cryptographically anchored to an immutable `Source` node in FalkorDB. If no source exists, the agent deterministically refuses to answer, guaranteeing zero hallucinations."*
+  > *"Every single claim is grounded to an immutable `Source` node with a verified SHA-256 hash in FalkorDB. If no verified source exists in the company graph, the agent deterministically refuses to answer."*
 
 ---
 
