@@ -14,8 +14,8 @@ help:
 
 setup:
 	python -m pip install --upgrade pip
-	python -m pip install -e packages/core
-	python -m pip install -e .
+	python -m pip install -e "packages/core[dev]"
+	python -m pip install -e ".[api,dev]"
 
 dev:
 	@echo "Starting fullstack development environment..."

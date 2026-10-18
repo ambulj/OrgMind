@@ -1,6 +1,8 @@
 # Design System Standard: Tailwind CSS Token Specification
 
 - **Document ID**: DOC_FRONTEND_TOKENS
+- **Decision ID**: DEC_PORTAL_2026_03
+- **Topic**: Frontend
 - **Author**: Frank Wright (Frontend Lead)
 - **Date**: 2026-03-20
 - **Project**: PRJ_PORTAL_REDESIGN

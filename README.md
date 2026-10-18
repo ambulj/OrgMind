@@ -9,7 +9,7 @@
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](#)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue.svg)](#)
 
-> **OrgMind** connects people, teams, projects, documents, tickets, chats, and decisions in one unified knowledge graph powered by **FalkorDB**. An autonomous agent answers complex organizational questions with cryptographic citation grounding, bitemporal governance, live freshness supersession, and role-gated two-phase actions.
+> **OrgMind** connects people, teams, projects, documents, tickets, chats, and decisions in a unified enterprise knowledge graph powered by **FalkorDB**. A grounded agent coordinates answering organizational questions with SHA-256 verified citation tracking, bitemporal decision history, live freshness supersession, and role-gated two-phase actions.
 
 ---
 
@@ -94,7 +94,7 @@ OrgMind is structured as a clean, enterprise monorepo:
 1. **Evidence-Based Acceptance**: Never claim "done" without executing acceptance commands and recording real output in [`STATUS.md`](file:///c:/Users/sauja/Downloads/New%20folder/STATUS.md).
 2. **OpenCypher Subset Compliance**: Parameterize all queries against FalkorDB; end-users never execute raw Cypher queries.
 3. **Never Delete History**: Superseding updates `status="superseded"` and `valid_to`. Deletions use **Redaction Tombstones** (blank Source text, keep graph structure, log who/when/why).
-4. **Cryptographic Citation Grounding**: Every answer claim must cite a Source ID that exists in FalkorDB, was returned by a tool in that turn, and is visible to the caller's role.
+4. **Verified Citation Grounding**: Every answer claim must cite a Source ID that exists in FalkorDB, was returned by a tool in that turn, and is visible to the caller's role. Citations carry verified SHA-256 source hashes and file origins.
 5. **Untrusted Data Boundary**: Documents and chat transcripts are untrusted data. Tool outputs and extraction inputs are enclosed in strict delimiters (`=== BEGIN UNTRUSTED DATA ===`) with prompt-injection defense.
 6. **Two-Phase Action Governance**: Mutating actions (`create_ticket`, `draft_message`, `assign_task`) are propose-then-confirm, role-gated, and logged to an immutable audit log.
 7. **Clear Synthetic Labeling**: Synthetic sample datasets are clearly marked across the UI (`Synthetic Baseline: Northwind Labs`).

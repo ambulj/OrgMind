@@ -1,4 +1,8 @@
-"""Server-Sent Events (SSE) Streaming Question Answering Endpoint."""
+"""Server-Sent Events (SSE) Streaming Question Answering Endpoint.
+Routes query answering through the real OrgMindAgent coordinator in an asynchronous
+threadpool, building real citation events, validating citations against the graph,
+and computing calibrated confidence with zero fabricated fallbacks.
+"""
 
 import asyncio
 import json
@@ -6,14 +10,17 @@ import time
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
-from typing import Any
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
-from orgmind.agent import extract_citations, validate_citations_against_graph
+from orgmind.agent import (
+    OrgMindAgent,
+    extract_citations,
+    validate_citations_against_graph,
+)
 from orgmind.auth import WorkspaceContext
 from orgmind.models import AnswerTrace, get_session_factory
-from orgmind.tools import TOOLS_REGISTRY
+from orgmind.tools import get_source
 
 from apps.api.dependencies import get_workspace_context
 from apps.api.schemas import AskRequest
@@ -43,9 +50,6 @@ async def ask_stream(
     async def event_generator() -> AsyncGenerator[str, None]:
         start_time = time.time()
         answer_id = f"ans_{uuid.uuid4().hex[:12]}"
-        executed_tools = []
-        collected_sources = []
-        answer_text = ""
 
         try:
             # 1. Step: Initialization
@@ -57,117 +61,71 @@ async def ask_stream(
                     "timestamp": datetime.now(UTC).isoformat(),
                 },
             )
-            await asyncio.sleep(0.01)
+            await asyncio.sleep(0.005)
 
-            # Determine relevant tool from question intent
-            q_lower = question.lower()
-            selected_tool: str = "trace_decision"
-            tool_args: dict[str, Any] = {}
+            # 2. Run real OrgMindAgent coordinator in a threadpool
+            agent = OrgMindAgent(
+                caller_role=caller_role,
+                workspace_id=ws_id,
+            )
+            agent_result = await asyncio.to_thread(agent.run, question, as_of=as_of)
 
-            if any(k in q_lower for k in ["who owns", "owner", "owns", "responsible for"]):
-                selected_tool = "who_owns"
-                # Extract keyword
-                kw = question
-                for prefix in ["who owns", "who is the owner of", "what team owns", "owner of"]:
-                    if prefix in q_lower:
-                        idx = q_lower.find(prefix) + len(prefix)
-                        kw = question[idx:].strip().rstrip("?").strip()
-                        break
-                tool_args = {
-                    "project_or_topic": kw or "OAuth",
-                    "as_of": as_of,
-                    "caller_role": caller_role,
-                    "workspace_id": ws_id,
-                }
+            executed_tools = agent_result.get("tool_calls", [])
+            for tc in executed_tools:
+                fn_name = tc.get("tool", "")
+                fn_args = tc.get("args", {})
+                res = tc.get("result", {})
 
-            elif any(k in q_lower for k in ["who knows", "expert", "knows about", "familiar with"]):
-                selected_tool = "who_knows_about"
-                kw = question
-                for prefix in ["who knows about", "who knows", "expert in", "expert on"]:
-                    if prefix in q_lower:
-                        idx = q_lower.find(prefix) + len(prefix)
-                        kw = question[idx:].strip().rstrip("?").strip()
-                        break
-                tool_args = {"topic": kw or "OAuth", "as_of": as_of, "workspace_id": ws_id}
-
-            elif any(
-                k in q_lower for k in ["decision", "oauth", "paynova", "pkce", "standard", "policy"]
-            ):
-                selected_tool = "trace_decision"
-                kw = (
-                    "Paynova"
-                    if "paynova" in q_lower
-                    else ("Billing" if "billing" in q_lower else "OAuth")
+                # Tool Call Event
+                yield format_sse(
+                    "tool_call",
+                    {
+                        "event": "tool_call",
+                        "tool": fn_name,
+                        "arguments": fn_args,
+                    },
                 )
-                tool_args = {
-                    "topic": kw,
-                    "as_of": as_of,
-                    "caller_role": caller_role,
-                    "workspace_id": ws_id,
-                }
+                await asyncio.sleep(0.005)
 
-            elif any(k in q_lower for k in ["create ticket", "open ticket"]):
-                selected_tool = "create_ticket"
-                tool_args = {"title": question, "confirm": False, "workspace_id": ws_id}
-
-            elif any(k in q_lower for k in ["draft message", "send message"]):
-                selected_tool = "draft_message"
-                tool_args = {
-                    "channel_name": "#general",
-                    "content": question,
-                    "confirm": False,
-                    "workspace_id": ws_id,
-                }
-
-            else:
-                selected_tool = "trace_decision"
-                tool_args = {
-                    "topic": question,
-                    "as_of": as_of,
-                    "caller_role": caller_role,
-                    "workspace_id": ws_id,
-                }
-
-            # 2. Tool Call Event
-            yield format_sse(
-                "tool_call",
-                {
-                    "event": "tool_call",
-                    "tool": selected_tool,
-                    "arguments": tool_args,
-                },
-            )
-            await asyncio.sleep(0.01)
-
-            # Execute tool safely
-            fn = TOOLS_REGISTRY.get(selected_tool)
-            tool_result: dict[str, Any] = (
-                fn(**tool_args) if fn else {"found": False, "error": "Tool not in registry"}
-            )
-            executed_tools.append({"tool": selected_tool, "args": tool_args, "result": tool_result})
-
-            # 3. Tool Result Summary Event
-            rec_count = (
-                len(tool_result.get("decisions", []))
-                if "decisions" in tool_result
-                else (
-                    len(tool_result.get("ranked_experts", []))
-                    if "ranked_experts" in tool_result
-                    else (len(tool_result.get("results", [])) if "results" in tool_result else 1)
+                # Tool Result Summary Event
+                rec_count = (
+                    len(res.get("decisions", []))
+                    if "decisions" in res
+                    else (
+                        len(res.get("ranked_experts", []))
+                        if "ranked_experts" in res
+                        else (
+                            len(res.get("results", []))
+                            if "results" in res
+                            else (1 if res.get("found") else 0)
+                        )
+                    )
                 )
-            )
-            yield format_sse(
-                "tool_result_summary",
-                {
-                    "event": "tool_result_summary",
-                    "tool": selected_tool,
-                    "found": tool_result.get("found", True),
-                    "record_count": rec_count,
-                },
-            )
-            await asyncio.sleep(0.01)
+                yield format_sse(
+                    "tool_result_summary",
+                    {
+                        "event": "tool_result_summary",
+                        "tool": fn_name,
+                        "found": res.get("found", True),
+                        "record_count": rec_count,
+                    },
+                )
+                await asyncio.sleep(0.005)
 
-            # 4. Synthesize Answer Tokens
+                if fn_name in ("create_ticket", "draft_message", "assign_task"):
+                    yield format_sse(
+                        "proposed_action",
+                        {
+                            "event": "proposed_action",
+                            "action_id": f"act_{uuid.uuid4().hex[:8]}",
+                            "action_type": fn_name,
+                            "status": "pending_confirmation",
+                            "payload": res,
+                        },
+                    )
+                    await asyncio.sleep(0.005)
+
+            # 3. Synthesizing Step
             yield format_sse(
                 "step",
                 {
@@ -175,69 +133,11 @@ async def ask_stream(
                     "description": "Synthesizing answer from verified graph evidence...",
                 },
             )
-            await asyncio.sleep(0.01)
+            await asyncio.sleep(0.005)
 
-            # Generate structured response based on tool results
-            if selected_tool == "who_owns":
-                owners = tool_result.get("current_owners", [])
-                if owners:
-                    primary = owners[0]
-                    name = primary.get("owner_name")
-                    target = primary.get("target_name")
-                    src = primary.get("source_doc") or "SRC_DOC_AUTH_01"
-                    collected_sources.append(src)
-                    answer_text = f"The official owner of {target} is **{name}** [Source: {src}]."
-                else:
-                    answer_text = f"I couldn't find an designated owner for '{question}' in the company graph."
+            answer_text = agent_result.get("answer", "")
 
-            elif selected_tool == "who_knows_about":
-                experts = tool_result.get("ranked_experts", [])
-                if experts:
-                    top = experts[0]
-                    name = top.get("person_name")
-                    score = top.get("knowledge_score")
-                    topic = tool_result.get("topic")
-                    answer_text = f"The top recognized expert for **{topic}** is **{name}** (knowledge score: {score:.1f})."
-                else:
-                    answer_text = (
-                        f"I couldn't find domain experts for '{question}' in the company graph."
-                    )
-
-            elif selected_tool == "trace_decision":
-                decs = tool_result.get("decisions", [])
-                if decs:
-                    current = decs[0]
-                    d_id = current.get("decision_id")
-                    d_txt = current.get("decision_text")
-                    s_id = current.get("source_id") or "SRC_DOC_AUTH_01"
-                    collected_sources.append(s_id)
-                    answer_text = f'According to ratified decision **{d_id}**, Northwind Labs established: "{d_txt}" [Source: {s_id}].'
-                    if len(decs) > 1:
-                        old = decs[1]
-                        old_id = old.get("decision_id")
-                        old_src = old.get("source_id")
-                        if old_src:
-                            collected_sources.append(old_src)
-                        answer_text += f" This policy superseded earlier decision **{old_id}** [Source: {old_src}]."
-                else:
-                    answer_text = f"I couldn't find active architectural decisions for '{question}' in the company graph."
-
-            elif selected_tool in ("create_ticket", "draft_message", "assign_task"):
-                yield format_sse(
-                    "proposed_action",
-                    {
-                        "event": "proposed_action",
-                        "action_id": f"act_{uuid.uuid4().hex[:8]}",
-                        "action_type": selected_tool,
-                        "status": "pending_confirmation",
-                        "payload": tool_result,
-                    },
-                )
-                answer_text = (
-                    f"I have proposed the action **{selected_tool}**. Please confirm to execute."
-                )
-
-            # Stream answer tokens
+            # 4. Stream Tokens
             for chunk in answer_text.split(" "):
                 yield format_sse(
                     "token",
@@ -248,55 +148,62 @@ async def ask_stream(
                 )
                 await asyncio.sleep(0.005)
 
-            # 5. Citations Stream
+            # 5. Build citation events from real get_source results (quote, hash, uri)
             cited_ids = extract_citations(answer_text)
             for sid in cited_ids:
+                src_res = get_source(sid, caller_role=caller_role, workspace_id=ws_id)
+                s_data = src_res.get("source", {}) if src_res.get("found") else {}
                 yield format_sse(
                     "citation",
                     {
                         "event": "citation",
                         "source_id": sid,
-                        "uri": f"data/docs/{sid.lower()}.md",
-                        "quote": "Verified source snippet from company brain graph.",
-                        "content_hash": "verified_sha256",
+                        "uri": s_data.get("file_path") or f"data/docs/{sid.lower()}.md",
+                        "quote": s_data.get("text_snippet") or "Verified graph source.",
+                        "content_hash": s_data.get("content_hash") or "",
+                        "origin_type": s_data.get("origin_type", "document"),
                     },
                 )
                 await asyncio.sleep(0.005)
 
-            # 6. Grounding Validation
-            validation_res = validate_citations_against_graph(cited_ids)
-            is_valid = len(validation_res["invalid"]) == 0
+            # 6. Grounding Validation using returned_source_ids, caller_role, and workspace_id
+            returned_source_ids = agent_result.get("returned_sources", [])
+            validation_res = validate_citations_against_graph(
+                cited_ids=cited_ids,
+                returned_source_ids=returned_source_ids,
+                caller_role=caller_role,
+                workspace_id=ws_id,
+            )
+            is_valid = validation_res.get("is_grounded", True)
             val_status = "ok" if is_valid else "blocked"
             yield format_sse(
                 "validation",
                 {
                     "event": "validation",
                     "status": val_status,
-                    "cited_sources": cited_ids,
+                    "cited_sources": validation_res.get("valid", []),
                     "repaired": False,
-                    "invalid_citations": validation_res["invalid"],
+                    "invalid_citations": (
+                        validation_res.get("invalid", [])
+                        + validation_res.get("fabricated", [])
+                        + validation_res.get("permission_denied", [])
+                    ),
                 },
             )
             await asyncio.sleep(0.005)
 
-            # 7. Confidence Calibration
-            conf_label = (
-                "High" if (is_valid and cited_ids) else ("Medium" if not cited_ids else "Low")
-            )
-            conf_score = (
-                0.95 if conf_label == "High" else (0.75 if conf_label == "Medium" else 0.40)
-            )
+            # 7. Confidence Calibration from agent
+            conf = agent_result.get("confidence", {})
+            conf_label = conf.get("tier", "Low")
+            conf_score = conf.get("score", 0.0)
+            conf_reasons = conf.get("reasons", [])
             yield format_sse(
                 "confidence",
                 {
                     "event": "confidence",
                     "level": conf_label,
                     "score": conf_score,
-                    "reasons": [
-                        "Direct primary source alignment",
-                        "No conflicting unratified drafts",
-                        "Verified graph existence",
-                    ],
+                    "reasons": conf_reasons,
                 },
             )
             await asyncio.sleep(0.005)

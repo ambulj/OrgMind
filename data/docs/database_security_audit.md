@@ -1,6 +1,8 @@
 # Security Policy: Database Connection IAM Authentication
 
 - **Document ID**: DOC_DB_SECURITY_AUDIT
+- **Decision ID**: DEC_SEC_2026_01
+- **Topic**: Security
 - **Author**: Elena Rostova (Staff Security Engineer)
 - **Date**: 2026-02-12
 - **Project**: PRJ_K8S_MIGRATION

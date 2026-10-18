@@ -164,6 +164,12 @@ All microservice HTTP endpoints must propagate OpenTelemetry traceparent headers
         assert edge_count_1 == edge_count_2
     finally:
         os.unlink(file_path)
+        try:
+            g = get_graph("default")
+            g.query("MATCH (d:Decision) WHERE d.text CONTAINS $tok DETACH DELETE d", {"tok": run_token})
+            g.query("MATCH (s:Source) WHERE s.file_path = $fp DETACH DELETE s", {"fp": file_path})
+        except Exception:
+            pass
 
 
 def test_reversal_message_produces_pending_review(session):

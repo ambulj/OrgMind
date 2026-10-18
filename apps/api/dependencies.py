@@ -6,6 +6,7 @@ from collections.abc import Generator
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from orgmind.auth import WorkspaceContext, decode_access_token
+from orgmind.config import settings
 from orgmind.models import Membership, Role, User, Workspace, get_session_factory
 from sqlalchemy.orm import Session
 
@@ -24,7 +25,8 @@ def get_current_user(
     session: Session = Depends(get_db_session),
 ) -> User:
     """Authenticates the request via Bearer JWT token.
-    Falls back to default developer admin user if no header is supplied in local mode.
+    Returns 401 without a valid token. Development fallback user is ONLY permitted
+    when settings.ENV == 'development'.
     """
     if auth_creds and auth_creds.credentials:
         try:
@@ -36,34 +38,45 @@ def get_current_user(
                 headers={"WWW-Authenticate": "Bearer"},
             ) from e
         user_id = payload.get("sub")
-        email = payload.get("email") or f"{user_id}@northwind.io"
+        email = payload.get("email")
         user = session.query(User).filter((User.id == user_id) | (User.email == email)).first()
         if not user:
-            # Auto-provision user record for valid signed token
-            user = User(
-                id=user_id,
-                email=email,
-                hashed_password="jwt_authenticated_user",
-                full_name=payload.get("name", user_id),
-                is_active=True,
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User account not found or deactivated.",
+                headers={"WWW-Authenticate": "Bearer"},
             )
-            session.add(user)
-            session.commit()
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User account is inactive.",
+            )
         return user
 
-    # Local development fallback user: Ensure developer admin user exists
-    dev_user = session.query(User).filter_by(email="admin@northwind.io").first()
-    if not dev_user:
-        dev_user = User(
-            id="usr_admin_default",
-            email="admin@northwind.io",
-            hashed_password="local_dev_dummy_hash",
-            full_name="Northwind Admin",
-            is_active=True,
-        )
-        session.add(dev_user)
-        session.commit()
-    return dev_user
+    # Dev fallback ONLY behind explicit ENV == 'development'
+    if settings.ENV.lower() in ("development", "dev"):
+        dev_user = session.query(User).filter_by(email="admin@northwind.io").first()
+        if not dev_user:
+            from orgmind.auth import hash_password
+            dev_user = User(
+                id="usr_admin_default",
+                email="admin@northwind.io",
+                hashed_password=hash_password("admin123"),
+                full_name="Northwind Admin",
+                is_active=True,
+            )
+            session.add(dev_user)
+            default_ws = session.query(Workspace).filter_by(slug="default").first()
+            if default_ws:
+                session.add(Membership(user_id=dev_user.id, workspace_id=default_ws.id, role=Role.ADMIN.value))
+            session.commit()
+        return dev_user
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Authentication required. Provide a valid Bearer token.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 
 def get_workspace_context(
@@ -72,40 +85,47 @@ def get_workspace_context(
     auth_creds: HTTPAuthorizationCredentials | None = Depends(security_scheme),
     session: Session = Depends(get_db_session),
 ) -> WorkspaceContext:
-    """Resolves multi-tenant workspace context and user's role within that workspace."""
-    ws_slug = (x_workspace_id or "default").strip()
-    workspace = session.query(Workspace).filter_by(slug=ws_slug).first()
-    if not workspace:
-        # Auto-create workspace record for default slug if not exists
-        workspace = Workspace(id=ws_slug, slug=ws_slug, name=f"{ws_slug.title()} Workspace")
-        session.add(workspace)
-        session.commit()
+    """Resolves multi-tenant workspace context and user's role within that workspace.
+    Enforces that:
+    1. Workspace must exist (never auto-create on GET/lookup).
+    2. User MUST have a membership record in the workspace.
+    3. Role is taken strictly from the membership row in database, NEVER from token or headers.
+    """
+    ws_target = (x_workspace_id or "default").strip().lower()
 
-    payload_role = None
-    if auth_creds and auth_creds.credentials:
-        try:
-            payload = decode_access_token(auth_creds.credentials)
-            payload_role = payload.get("role")
-        except Exception:
-            pass
-
-    # Determine user's membership role in this workspace
-    membership = (
-        session.query(Membership).filter_by(user_id=user.id, workspace_id=workspace.id).first()
+    # Locate workspace by id or slug
+    workspace = (
+        session.query(Workspace)
+        .filter((Workspace.slug == ws_target) | (Workspace.id == ws_target))
+        .first()
     )
-    role_val = membership.role if membership else payload_role
+    if not workspace:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Workspace '{ws_target}' not found.",
+        )
 
-    if not role_val:
-        role_val = Role.ADMIN.value if user.email.startswith("admin") else Role.VIEWER.value
+    # Require membership row in the database
+    membership = (
+        session.query(Membership)
+        .filter_by(user_id=user.id, workspace_id=workspace.id)
+        .first()
+    )
+    if not membership:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Access denied: user '{user.email}' is not a member of workspace '{workspace.slug}'.",
+        )
 
-    # Parse role enum
+    # Take role strictly from the membership row
+    role_val = membership.role
     role_enum = Role(role_val) if role_val in [r.value for r in Role] else Role.VIEWER
 
     req_id = f"req_{uuid.uuid4().hex[:8]}"
     return WorkspaceContext(
         user_id=str(user.id),
         user_email=str(user.email),
-        workspace_id=str(workspace.slug),
+        workspace_id=str(workspace.id),
         role=role_enum,
         request_id=req_id,
     )

@@ -1,6 +1,8 @@
 # Evaluation Draft: European Payment Gateway Options
 
 - **Document ID**: DOC_BILLING_GATEWAY_EVAL_DRAFT
+- **Draft ID**: DRAFT_PAYNOVA_EVAL
+- **Topic**: Paynova
 - **Author**: Rohan Iyer (Senior Backend Engineer)
 - **Date**: 2026-02-24
 - **Project**: PRJ_BILLING_STRIPE

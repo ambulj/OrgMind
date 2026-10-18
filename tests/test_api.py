@@ -12,8 +12,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "packages" / "core"))
 
-from orgmind.auth import Role, create_access_token
-from orgmind.models import init_app_db
+from orgmind.auth import Role, create_access_token, hash_password
+from orgmind.models import Membership, User, get_session_factory, init_app_db
 
 from apps.api.main import app
 
@@ -31,6 +31,32 @@ def client():
 
 @pytest.fixture
 def admin_token():
+    session_factory = get_session_factory()
+    with session_factory() as session:
+        user = session.query(User).filter_by(id="usr_admin_test_01").first()
+        if not user:
+            user = User(
+                id="usr_admin_test_01",
+                email="admin_test_01@northwind.io",
+                hashed_password=hash_password("adminpass"),
+                full_name="Admin Tester",
+            )
+            session.add(user)
+        membership = (
+            session.query(Membership)
+            .filter_by(user_id="usr_admin_test_01", workspace_id="default")
+            .first()
+        )
+        if not membership:
+            session.add(
+                Membership(
+                    user_id="usr_admin_test_01",
+                    workspace_id="default",
+                    role=Role.ADMIN.value,
+                )
+            )
+        session.commit()
+
     return create_access_token(
         user_id="usr_admin_test_01",
         email="admin_test_01@northwind.io",
@@ -41,6 +67,32 @@ def admin_token():
 
 @pytest.fixture
 def viewer_token():
+    session_factory = get_session_factory()
+    with session_factory() as session:
+        user = session.query(User).filter_by(id="usr_viewer_test_01").first()
+        if not user:
+            user = User(
+                id="usr_viewer_test_01",
+                email="viewer_test_01@northwind.io",
+                hashed_password=hash_password("viewerpass"),
+                full_name="Viewer Tester",
+            )
+            session.add(user)
+        membership = (
+            session.query(Membership)
+            .filter_by(user_id="usr_viewer_test_01", workspace_id="default")
+            .first()
+        )
+        if not membership:
+            session.add(
+                Membership(
+                    user_id="usr_viewer_test_01",
+                    workspace_id="default",
+                    role=Role.VIEWER.value,
+                )
+            )
+        session.commit()
+
     return create_access_token(
         user_id="usr_viewer_test_01",
         email="viewer_test_01@northwind.io",
@@ -60,9 +112,12 @@ def test_health_endpoint(client: TestClient):
     assert "job_queue" in data["components"]
 
 
-def test_consistent_error_envelope(client: TestClient):
+def test_consistent_error_envelope(client: TestClient, viewer_token: str):
     """Tests that errors follow the standard envelope format defined in API.md."""
-    response = client.get("/api/v1/entities/invalid_category")
+    response = client.get(
+        "/api/v1/entities/invalid_category",
+        headers={"Authorization": f"Bearer {viewer_token}", "X-Workspace-Id": "default"},
+    )
     assert response.status_code == 400
     data = response.json()
     assert "error" in data
@@ -183,73 +238,86 @@ def test_source_permission_enforcement(client: TestClient, viewer_token: str, ad
         "SET s.visibility = '[\"Admin\", \"Auditor\"]', s.redacted = false, s.text_snippet = 'Confidential Strategy M&A.'"
     )
 
-    # 1. Public/All Source -> Viewer can access
-    pub_resp = client.get(
-        "/api/v1/sources/SRC_DOC_AUTH_01",
-        headers={"Authorization": f"Bearer {viewer_token}", "X-Workspace-Id": "default"},
-    )
-    assert pub_resp.status_code == 200
-    assert pub_resp.json()["id"] == "SRC_DOC_AUTH_01"
+    try:
+        # 1. Public/All Source -> Viewer can access
+        pub_resp = client.get(
+            "/api/v1/sources/SRC_DOC_AUTH_01",
+            headers={"Authorization": f"Bearer {viewer_token}", "X-Workspace-Id": "default"},
+        )
+        assert pub_resp.status_code == 200
+        assert pub_resp.json()["id"] == "SRC_DOC_AUTH_01"
 
-    # 2. Restricted Source -> Viewer gets 403 Forbidden
-    viewer_restricted = client.get(
-        "/api/v1/sources/SRC_RESTRICTED_CONFIDENTIAL_01",
-        headers={"Authorization": f"Bearer {viewer_token}", "X-Workspace-Id": "default"},
-    )
-    assert viewer_restricted.status_code == 403
-    assert "permission denied" in viewer_restricted.json()["error"]["message"].lower()
+        # 2. Restricted Source -> Viewer gets 403 Forbidden
+        viewer_restricted = client.get(
+            "/api/v1/sources/SRC_RESTRICTED_CONFIDENTIAL_01",
+            headers={"Authorization": f"Bearer {viewer_token}", "X-Workspace-Id": "default"},
+        )
+        assert viewer_restricted.status_code == 403
+        assert "permission denied" in viewer_restricted.json()["error"]["message"].lower()
 
-    # 3. Restricted Source -> Admin gets 200 OK
-    admin_restricted = client.get(
-        "/api/v1/sources/SRC_RESTRICTED_CONFIDENTIAL_01",
-        headers={"Authorization": f"Bearer {admin_token}", "X-Workspace-Id": "default"},
-    )
-    assert admin_restricted.status_code == 200
-    assert admin_restricted.json()["id"] == "SRC_RESTRICTED_CONFIDENTIAL_01"
+        # 3. Restricted Source -> Admin gets 200 OK
+        admin_restricted = client.get(
+            "/api/v1/sources/SRC_RESTRICTED_CONFIDENTIAL_01",
+            headers={"Authorization": f"Bearer {admin_token}", "X-Workspace-Id": "default"},
+        )
+        assert admin_restricted.status_code == 200
+        assert admin_restricted.json()["id"] == "SRC_RESTRICTED_CONFIDENTIAL_01"
+    finally:
+        graph.query("MATCH (s:Source {id: 'SRC_RESTRICTED_CONFIDENTIAL_01'}) DELETE s")
 
 
 def test_two_phase_actions_and_audit(client: TestClient, admin_token: str):
     """Tests propose-then-confirm action lifecycle and audit trail generation."""
     headers = {"Authorization": f"Bearer {admin_token}", "X-Workspace-Id": "default"}
 
-    # 1. Propose Ticket Action
-    prop_resp = client.post(
-        "/api/v1/actions/propose",
-        headers=headers,
-        json={
-            "action_type": "create_ticket",
-            "parameters": {
-                "title": "Upgrade Keycloak Identity Provider to v24",
-                "description": "Security patch for CVE-2026-X",
-                "project_id": "PRJ_OAUTH_UPGRADE",
+    try:
+        # 1. Propose Ticket Action
+        prop_resp = client.post(
+            "/api/v1/actions/propose",
+            headers=headers,
+            json={
+                "action_type": "create_ticket",
+                "parameters": {
+                    "title": "Upgrade Keycloak Identity Provider to v24",
+                    "description": "Security patch for CVE-2026-X",
+                    "project_id": "PRJ_OAUTH_UPGRADE",
+                },
             },
-        },
-    )
-    assert prop_resp.status_code == 200
-    prop_data = prop_resp.json()
-    action_id = prop_data["action_id"]
-    assert prop_data["status"] == "proposed"
+        )
+        assert prop_resp.status_code == 200
+        prop_data = prop_resp.json()
+        action_id = prop_data["action_id"]
+        assert prop_data["status"] == "proposed"
 
-    # 2. Confirm Action
-    conf_resp = client.post(
-        "/api/v1/actions/confirm",
-        headers=headers,
-        json={"action_id": action_id},
-    )
-    assert conf_resp.status_code == 200
-    conf_data = conf_resp.json()
-    assert conf_data["status"] == "confirmed"
+        # 2. Confirm Action
+        conf_resp = client.post(
+            "/api/v1/actions/confirm",
+            headers=headers,
+            json={"action_id": action_id},
+        )
+        assert conf_resp.status_code == 200
+        conf_data = conf_resp.json()
+        assert conf_data["status"] == "confirmed"
 
-    # 3. Verify in Audit Log
-    audit_resp = client.get(
-        "/api/v1/audit?action=execute_create_ticket",
-        headers=headers,
-    )
-    assert audit_resp.status_code == 200
-    audit_data = audit_resp.json()
-    assert audit_data["total"] >= 1
-    latest = audit_data["items"][0]
-    assert latest["entity_id"] == action_id
+        # 3. Verify in Audit Log
+        audit_resp = client.get(
+            "/api/v1/audit?action=execute_create_ticket",
+            headers=headers,
+        )
+        assert audit_resp.status_code == 200
+        audit_data = audit_resp.json()
+        assert audit_data["total"] >= 1
+        latest = audit_data["items"][0]
+        assert latest["entity_id"] == action_id
+    finally:
+        try:
+            from orgmind.db import get_graph
+            g = get_graph("default")
+            g.query(
+                "MATCH (t:Ticket) WHERE t.title = 'Upgrade Keycloak Identity Provider to v24' DETACH DELETE t"
+            )
+        except Exception:
+            pass
 
 
 def test_end_to_end_ask_sse_streaming(client: TestClient, admin_token: str):

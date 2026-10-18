@@ -1,6 +1,8 @@
 # Product Requirements Document: Customer Self-Serve Portal
 
 - **Document ID**: DOC_PORTAL_PRD
+- **Decision ID**: DEC_PORTAL_2026_01
+- **Topic**: Frontend
 - **Author**: Carol Danvers (Senior Product Manager)
 - **Date**: 2026-01-10
 - **Project**: PRJ_PORTAL_REDESIGN

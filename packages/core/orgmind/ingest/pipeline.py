@@ -168,12 +168,12 @@ class IngestionPipeline:
             re.DOTALL | re.IGNORECASE,
         )
         topic_match = re.search(
-            r"(?:Topic|Project|Component|Architecture)[:\s]*([A-Za-z0-9_\-\s]+)",
+            r"(?:^|\n)(?:##\s*|[-*]\s+\*\*)?(?:Topic|Project|Component|Architecture)\**:\s*([^\r\n]+)",
             combined_text,
             re.IGNORECASE,
         )
         decided_by_match = re.search(
-            r"(?:Decided by|Author|Lead|Owner)[:\s]*([A-Za-z0-9_\-\s]+)",
+            r"(?:^|\n)(?:##\s*|[-*]\s+\*\*)?(?:Decided by|Author|Lead|Owner)\**:\s*([^\r\n]+)",
             combined_text,
             re.IGNORECASE,
         )

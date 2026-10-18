@@ -1,16 +1,17 @@
-"""Ingestion of unstructured text (Markdown documents & JSONL chats) using LLM extraction.
+"""Ingestion of unstructured text (Markdown documents & JSONL chats) using schema extraction.
 
 Technical Terms:
 - Unstructured Data: Information without a pre-set tabular schema (e.g., meeting notes, chat logs).
-- Schema-Guided Extraction: Prompting an LLM with a strict JSON format (or Pydantic schema)
-  to identify specific entities (Person, Decision, Topic) and relationships.
+- Schema-Guided Extraction: Parsing documents against strict entity models (Person, Decision, Draft, Topic).
 - Provenance Grounding: Ensuring that every extracted fact is stored alongside a `Source` node
-  containing the exact text quote and file location.
+  containing cryptographic content hash, exact text quote, and file location.
 """
 
 import glob
+import hashlib
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -20,6 +21,7 @@ project_root = str(Path(__file__).resolve().parent.parent)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+from orgmind.config import settings
 from orgmind.db import get_graph
 from orgmind.freshness import apply_decision
 from orgmind.resolve import resolver
@@ -40,6 +42,7 @@ class ExtractedDecision(BaseModel):
     decided_by_mention: str | None = None
     date: str
     source: ExtractedSource
+    supersedes_id: str | None = None
 
 
 class ExtractedDraft(BaseModel):
@@ -59,237 +62,156 @@ class ExtractedExtractionResult(BaseModel):
 
 
 def extract_from_markdown_llm(file_path: str, content: str) -> ExtractedExtractionResult:
-    """Extracts decisions, draft recommendations, topics, and author mentions from markdown documents."""
-    clean_path = file_path.replace("\\", "/")
+    """Extracts decisions, draft recommendations, topics, and author mentions by analyzing document content.
+    Reads actual document frontmatter, decision quotes, and provenance blocks.
+    """
+    # 1. Parse frontmatter metadata bullets
+    doc_id_match = re.search(r"-\s*\*\*Document ID\*\*:\s*([A-Za-z0-9_]+)", content)
+    dec_id_match = re.search(r"-\s*\*\*Decision ID\*\*:\s*([A-Za-z0-9_]+)", content)
+    draft_id_match = re.search(r"-\s*\*\*Draft ID\*\*:\s*([A-Za-z0-9_]+)", content)
+    topic_match = re.search(r"-\s*\*\*Topic\*\*:\s*([^\r\n]+)", content)
+    author_match = re.search(
+        r"-\s*\*\*Author\*\*:\s*([A-Za-z0-9_\s&]+?)(?:\s*\(.*?\))?$",
+        content,
+        re.MULTILINE,
+    )
+    date_match = re.search(r"-\s*\*\*Date\*\*:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})", content)
+    supersedes_match = re.search(r"-\s*\*\*Supersedes\*\*:\s*([A-Za-z0-9_]+)", content)
+    source_match = re.search(r"-\s*Source ID:\s*`?([A-Za-z0-9_]+)`?", content, re.IGNORECASE)
 
-    if "auth_architecture" in clean_path:
-        return ExtractedExtractionResult(
-            decisions=[
-                ExtractedDecision(
-                    decision_id="DEC_AUTH_2026_01",
-                    topic="OAuth",
-                    text="Adopt OAuth 2.1 with PKCE for all web/mobile apps backed by Keycloak.",
-                    decided_by_mention="Alice Chen",
-                    date="2026-01-15",
-                    source=ExtractedSource(
-                        source_id="SRC_DOC_AUTH_01",
-                        file_path=file_path,
-                        chunk_offset=280,
-                        snippet="We have decided to adopt OAuth 2.1 with PKCE for all user-facing web and mobile applications, backed by Keycloak as our Identity Provider.",
-                    ),
-                )
-            ],
-            people_mentions=["Alice Chen", "Elena Rostova", "Bob Martinez"],
-            topics=["OAuth", "Keycloak", "Authentication", "Security"],
-        )
-    elif "oauth_pkce_spec" in clean_path:
-        return ExtractedExtractionResult(
-            decisions=[
-                ExtractedDecision(
-                    decision_id="DEC_AUTH_2026_02",
-                    topic="OAuth",
-                    text="Reject plain code challenges in authorization requests; enforce S256 code challenge method.",
-                    decided_by_mention="Alice Chen",
-                    date="2026-01-28",
-                    source=ExtractedSource(
-                        source_id="SRC_DOC_PKCE_01",
-                        file_path=file_path,
-                        chunk_offset=250,
-                        snippet="Keycloak will strictly reject any authorization request that uses code_challenge_method=plain. Only S256 is permitted across Northwind Labs systems.",
-                    ),
-                )
-            ],
-            people_mentions=["Alice Chen", "Elena Rostova"],
-            topics=["OAuth", "Security"],
-        )
-    elif "billing_migration" in clean_path:
-        return ExtractedExtractionResult(
-            decisions=[
-                ExtractedDecision(
-                    decision_id="DEC_BILLING_2026_01",
-                    topic="Billing",
-                    text="Adopt Stripe Elements for US checkout flow; queue webhook events with idempotency tracking.",
-                    decided_by_mention="Bob Martinez",
-                    date="2026-01-20",
-                    source=ExtractedSource(
-                        source_id="SRC_DOC_BILL_01",
-                        file_path=file_path,
-                        chunk_offset=210,
-                        snippet="We will use Stripe Elements for the frontend US subscription flow. Webhooks will be dispatched to an asynchronous queue with idempotency tracking.",
-                    ),
-                )
-            ],
-            people_mentions=["Bob Martinez", "Carol Danvers"],
-            topics=["Billing", "Stripe"],
-        )
-    elif "billing_gateway_eval_draft" in clean_path:
-        return ExtractedExtractionResult(
-            drafts=[
-                ExtractedDraft(
-                    draft_id="DRAFT_PAYNOVA_EVAL",
-                    topic="Paynova",
-                    recommendation="Strongly advise against Paynova due to lack of idempotency; recommend expanding Stripe Billing V2 or Adyen to Europe.",
-                    author_mention="Rohan Iyer",
-                    date="2026-02-24",
-                    source=ExtractedSource(
-                        source_id="SRC_DOC_DRAFT_PAYNOVA_EVAL",
-                        file_path=file_path,
-                        chunk_offset=240,
-                        snippet="Based on benchmark tests, Paynova's SDK lacks robust multi-currency idempotency and their sandbox exhibited intermittent timeout spikes. I strongly recommend expanding Stripe Billing V2 or Adyen to Europe rather than introducing Paynova.",
-                    ),
-                )
-            ],
-            people_mentions=["Rohan Iyer"],
-            topics=["Paynova", "Billing", "Stripe"],
-        )
-    elif "payments_gateway_decision" in clean_path:
-        return ExtractedExtractionResult(
-            decisions=[
-                ExtractedDecision(
-                    decision_id="DEC_PAYMENTS_2026_03_PAYNOVA",
-                    topic="Paynova",
-                    text="Adopt Paynova Gateway as primary rail for European recurring subscriptions.",
-                    decided_by_mention="Priya Sharma",
-                    date="2026-03-01",
-                    source=ExtractedSource(
-                        source_id="SRC_DOC_PAYNOVA_DECISION_01",
-                        file_path=file_path,
-                        chunk_offset=300,
-                        snippet="Northwind Labs adopts Paynova as the primary gateway rail for EU customer subscriptions, deploying their SDK across the billing services for Q2.",
-                    ),
-                )
-            ],
-            people_mentions=["Priya Sharma", "Neha Kapoor", "Bob Martinez", "Rohan Iyer"],
-            topics=["Paynova", "Billing"],
-        )
-    elif "k8s_multi_region_spec" in clean_path:
-        return ExtractedExtractionResult(
-            decisions=[
-                ExtractedDecision(
-                    decision_id="DEC_K8S_2026_01",
-                    topic="Kubernetes",
-                    text="Operate primary Kubernetes clusters in us-east-1 and active-passive standby in eu-central-1.",
-                    decided_by_mention="David Kim",
-                    date="2026-02-05",
-                    source=ExtractedSource(
-                        source_id="SRC_DOC_K8S_01",
-                        file_path=file_path,
-                        chunk_offset=220,
-                        snippet="We will operate primary Kubernetes clusters in us-east-1 and an active-passive standby cluster in eu-central-1 using Route53 latency routing and automatic health checks.",
-                    ),
-                )
-            ],
-            people_mentions=["David Kim", "Alice Chen"],
-            topics=["Kubernetes", "DevOps"],
-        )
-    elif "database_security_audit" in clean_path:
-        return ExtractedExtractionResult(
-            decisions=[
-                ExtractedDecision(
-                    decision_id="DEC_SEC_2026_01",
-                    topic="Security",
-                    text="Mandatory IAM role-based authentication (IRSA) for all database clients from Kubernetes pods.",
-                    decided_by_mention="Elena Rostova",
-                    date="2026-02-12",
-                    source=ExtractedSource(
-                        source_id="SRC_DOC_SEC_IAM_01",
-                        file_path=file_path,
-                        chunk_offset=210,
-                        snippet="All database clients connecting from Kubernetes pods must authenticate using short-lived IAM IRSA tokens instead of static passwords.",
-                    ),
-                )
-            ],
-            people_mentions=["Elena Rostova", "David Kim"],
-            topics=["Security", "Database"],
-        )
-    elif "portal_redesign_prd" in clean_path:
-        return ExtractedExtractionResult(
-            decisions=[
-                ExtractedDecision(
-                    decision_id="DEC_PORTAL_2026_01",
-                    topic="Frontend",
-                    text="Customer portal must provide self-serve PDF invoice receipt download from dashboard.",
-                    decided_by_mention="Carol Danvers",
-                    date="2026-01-10",
-                    source=ExtractedSource(
-                        source_id="SRC_DOC_PORTAL_PRD_01",
-                        file_path=file_path,
-                        chunk_offset=230,
-                        snippet="Carol Danvers established that user billing receipts must be downloadable in PDF format directly from the account overview dashboard.",
-                    ),
-                )
-            ],
-            people_mentions=["Carol Danvers", "Frank Wright"],
-            topics=["Frontend", "Product"],
-        )
-    elif "portal_handoff_memo" in clean_path:
-        return ExtractedExtractionResult(
-            decisions=[
-                ExtractedDecision(
-                    decision_id="DEC_PORTAL_2026_02",
-                    topic="Frontend",
-                    text="Formal project leadership and technical ownership of Customer Portal transfers from Carol Danvers to Frank Wright.",
-                    decided_by_mention="Carol Danvers",
-                    date="2026-03-15",
-                    source=ExtractedSource(
-                        source_id="SRC_DOC_PORTAL_HANDOFF_01",
-                        file_path=file_path,
-                        chunk_offset=260,
-                        snippet="Effective March 15, 2026, formal project leadership and technical ownership of the Customer Self-Serve Portal (PRJ_PORTAL_REDESIGN) transfers from Carol Danvers to Frank Wright.",
-                    ),
-                )
-            ],
-            people_mentions=["Carol Danvers", "Frank Wright"],
-            topics=["Frontend", "Product"],
-        )
-    elif "frontend_design_tokens" in clean_path:
-        return ExtractedExtractionResult(
-            decisions=[
-                ExtractedDecision(
-                    decision_id="DEC_PORTAL_2026_03",
-                    topic="Frontend",
-                    text="Adopt Tailwind CSS V4 standardized tokens and Northwind dark-mode theme.",
-                    decided_by_mention="Frank Wright",
-                    date="2026-03-20",
-                    source=ExtractedSource(
-                        source_id="SRC_DOC_DESIGN_TOKENS_01",
-                        file_path=file_path,
-                        chunk_offset=220,
-                        snippet="Frank Wright decided that all portal components must consume CSS variables defined in @theme matching the Northwind dark-mode standard.",
-                    ),
-                )
-            ],
-            people_mentions=["Frank Wright"],
-            topics=["Frontend", "Design"],
-        )
-    elif "telemetry_logging_standard" in clean_path:
-        return ExtractedExtractionResult(
-            decisions=[
-                ExtractedDecision(
-                    decision_id="DEC_TELEMETRY_2026_01",
-                    topic="Architecture",
-                    text="Standardize microservices logging on OpenTelemetry structured JSON with trace correlation.",
-                    decided_by_mention="Bob Martinez",
-                    date="2026-02-18",
-                    source=ExtractedSource(
-                        source_id="SRC_DOC_TELEMETRY_01",
-                        file_path=file_path,
-                        chunk_offset=230,
-                        snippet="All backend services must output structured JSON logs with trace_id and span_id injected by OpenTelemetry SDK for distributed request correlation.",
-                    ),
-                )
-            ],
-            people_mentions=["Bob Martinez", "Rohan Iyer"],
-            topics=["Architecture", "Telemetry"],
+    raw_author = author_match.group(1).strip() if author_match else None
+    if raw_author and "&" in raw_author:
+        primary_author = raw_author.split("&")[0].strip()
+    else:
+        primary_author = raw_author
+
+    raw_date = date_match.group(1).strip() if date_match else "2026-01-01"
+    raw_topic = topic_match.group(1).strip() if topic_match else "General"
+    source_id = (
+        source_match.group(1).strip()
+        if source_match
+        else f"SRC_{os.path.basename(file_path).split('.')[0].upper()}"
+    )
+    supersedes_id = supersedes_match.group(1).strip() if supersedes_match else None
+
+    # People mentions from handles and author fields
+    people_mentions: list[str] = []
+    for m in re.finditer(r"@([A-Za-z0-9_]+)", content):
+        handle = m.group(1)
+        resolved_pid = resolver.resolve_person(handle)
+        if resolved_pid:
+            p_info = resolver.id_to_person.get(resolved_pid, {})
+            name = p_info.get("name")
+            if name and name not in people_mentions:
+                people_mentions.append(name)
+    if primary_author and primary_author not in people_mentions:
+        people_mentions.append(primary_author)
+
+    # Topics detection
+    topics: list[str] = [raw_topic]
+    candidate_topics = [
+        "OAuth",
+        "Keycloak",
+        "Authentication",
+        "Security",
+        "Billing",
+        "Stripe",
+        "Paynova",
+        "Kubernetes",
+        "DevOps",
+        "Database",
+        "Frontend",
+        "Product",
+        "Design",
+        "Architecture",
+        "Telemetry",
+    ]
+    for ct in candidate_topics:
+        if ct.lower() in content.lower() and ct not in topics:
+            topics.append(ct)
+
+    decisions: list[ExtractedDecision] = []
+    drafts: list[ExtractedDraft] = []
+
+    # Check for quote or section text
+    quote_match = re.search(r">\s*\"(.*?)\"", content, re.DOTALL)
+    dec_header_match = re.search(r"##\s*Decision:\s*(.*?)(?=\n)", content, re.IGNORECASE)
+
+    if dec_id_match:
+        dec_id = dec_id_match.group(1).strip()
+        header_text = dec_header_match.group(1).strip() if dec_header_match else ""
+        if quote_match:
+            snippet = quote_match.group(1).strip().replace("\n", " ")
+            text = snippet
+        else:
+            sec_match = re.search(r"##\s*Decision:[^\n]*\n(.*?)(?=\n##|\Z)", content, re.DOTALL)
+            text_body = sec_match.group(1).strip() if sec_match else header_text
+            lines_body = [
+                l.strip("-* \t")
+                for l in text_body.splitlines()
+                if l.strip() and not l.strip().startswith("- **")
+            ]
+            text = " ".join(lines_body[:3]) if lines_body else header_text
+            snippet = text
+
+        decisions.append(
+            ExtractedDecision(
+                decision_id=dec_id,
+                topic=raw_topic,
+                text=text,
+                decided_by_mention=primary_author,
+                date=raw_date,
+                supersedes_id=supersedes_id,
+                source=ExtractedSource(
+                    source_id=source_id,
+                    file_path=file_path,
+                    chunk_offset=content.find(snippet[:40]) if snippet[:40] in content else 200,
+                    snippet=snippet,
+                ),
+            )
         )
 
-    return ExtractedExtractionResult()
+    elif draft_id_match:
+        draft_id = draft_id_match.group(1).strip()
+        rec_match = re.search(r"##\s*Recommendation:\s*(.*?)(?=\n)", content, re.IGNORECASE)
+        snippet = (
+            quote_match.group(1).strip().replace("\n", " ")
+            if quote_match
+            else (rec_match.group(1).strip() if rec_match else "Draft recommendation")
+        )
+        drafts.append(
+            ExtractedDraft(
+                draft_id=draft_id,
+                topic=raw_topic,
+                recommendation=snippet,
+                author_mention=primary_author,
+                date=raw_date,
+                source=ExtractedSource(
+                    source_id=source_id,
+                    file_path=file_path,
+                    chunk_offset=content.find(snippet[:40]) if snippet[:40] in content else 200,
+                    snippet=snippet,
+                ),
+            )
+        )
+
+    return ExtractedExtractionResult(
+        decisions=decisions,
+        drafts=drafts,
+        people_mentions=people_mentions,
+        topics=topics,
+    )
 
 
-def ingest_markdown_docs(docs_dir: str = "data/docs") -> None:
-    """Scans and extracts facts, decisions, and drafts from all markdown files in data/docs/."""
-    graph = get_graph()
+def ingest_markdown_docs(docs_dir: str = "data/docs", workspace_id: str | None = None) -> None:
+    """Scans and extracts facts, decisions, and drafts from all markdown files in data/docs/.
+    Guarantees chronological decision ingestion to eliminate OS-dependent glob ordering bugs.
+    """
+    graph = get_graph(workspace_id)
     md_files = glob.glob(os.path.join(docs_dir, "*.md"))
+
+    all_decisions: list[tuple[ExtractedDecision, str]] = []
+    all_drafts: list[tuple[ExtractedDraft, str]] = []
 
     for file_path in md_files:
         with open(file_path, encoding="utf-8") as f:
@@ -304,62 +226,11 @@ def ingest_markdown_docs(docs_dir: str = "data/docs") -> None:
 
         extracted = extract_from_markdown_llm(file_path, content)
 
-        # Ingest decisions with mandatory Source and superseding check
         for dec in extracted.decisions:
-            decider_id = (
-                resolver.resolve_person(dec.decided_by_mention) if dec.decided_by_mention else None
-            )
-            apply_decision(
-                decision_id=dec.decision_id,
-                topic=dec.topic,
-                text=dec.text,
-                source_id=dec.source.source_id,
-                source_file=dec.source.file_path,
-                source_snippet=dec.source.snippet,
-                chunk_offset=dec.source.chunk_offset,
-                decided_by_person_id=decider_id,
-                timestamp=dec.date,
-            )
+            all_decisions.append((dec, doc_id))
 
-        # Ingest draft recommendations
         for draft in extracted.drafts:
-            author_id = (
-                resolver.resolve_person(draft.author_mention) if draft.author_mention else None
-            )
-            draft_cypher = """
-            MERGE (src:Source {id: $source_id})
-            ON CREATE SET src.file_path = $source_file,
-                          src.chunk_offset = $chunk_offset,
-                          src.text_snippet = $snippet,
-                          src.created_at = $date
-            MERGE (dr:DraftRecommendation {id: $draft_id})
-            SET dr.topic = $topic,
-                dr.recommendation = $recommendation,
-                dr.date = $date
-            MERGE (dr)-[:DERIVED_FROM]->(src)
-            WITH dr
-            MATCH (doc:Document {id: $doc_id})
-            MERGE (doc)-[:CONTAINS_DRAFT]->(dr)
-            """
-            graph.query(
-                draft_cypher,
-                {
-                    "source_id": draft.source.source_id,
-                    "source_file": draft.source.file_path,
-                    "chunk_offset": draft.source.chunk_offset,
-                    "snippet": draft.source.snippet,
-                    "date": draft.date,
-                    "draft_id": draft.draft_id,
-                    "topic": draft.topic,
-                    "recommendation": draft.recommendation,
-                    "doc_id": doc_id,
-                },
-            )
-            if author_id:
-                graph.query(
-                    "MATCH (dr:DraftRecommendation {id: $draft_id}), (p:Person {id: $author_id}) MERGE (p)-[:AUTHORED]->(dr)",
-                    {"draft_id": draft.draft_id, "author_id": author_id},
-                )
+            all_drafts.append((draft, doc_id))
 
         # Ingest topic mentions
         for topic in extracted.topics:
@@ -372,7 +243,76 @@ def ingest_markdown_docs(docs_dir: str = "data/docs") -> None:
                 {"doc_id": doc_id, "topic": topic},
             )
 
-        print(f"[IngestUnstructured] Processed {file_path}")
+        print(f"[IngestUnstructured] Parsed {file_path}")
+
+    # CHRONOLOGICAL SORTING: Ingest decisions strictly by valid date
+    all_decisions.sort(key=lambda item: item[0].date)
+
+    for dec, doc_id in all_decisions:
+        decider_id = (
+            resolver.resolve_person(dec.decided_by_mention) if dec.decided_by_mention else None
+        )
+        apply_decision(
+            decision_id=dec.decision_id,
+            topic=dec.topic,
+            text=dec.text,
+            source_id=dec.source.source_id,
+            source_file=dec.source.file_path,
+            source_snippet=dec.source.snippet,
+            chunk_offset=dec.source.chunk_offset,
+            decided_by_person_id=decider_id,
+            timestamp=dec.date,
+            supersedes_id=dec.supersedes_id,
+            workspace_id=workspace_id,
+        )
+
+    # Ingest draft recommendations with full v0.2 Source properties
+    for draft, doc_id in all_drafts:
+        author_id = (
+            resolver.resolve_person(draft.author_mention) if draft.author_mention else None
+        )
+        content_hash = hashlib.sha256(draft.source.snippet.encode("utf-8")).hexdigest()
+        draft_cypher = """
+        MERGE (src:Source {id: $source_id})
+        SET src.file_path = $source_file,
+            src.chunk_offset = $chunk_offset,
+            src.text_snippet = $snippet,
+            src.created_at = $date,
+            src.content_hash = $content_hash,
+            src.visibility = '["all"]',
+            src.redacted = false,
+            src.origin_type = 'document',
+            src.valid_from = $date,
+            src.valid_to = ""
+        MERGE (dr:DraftRecommendation {id: $draft_id})
+        SET dr.topic = $topic,
+            dr.recommendation = $recommendation,
+            dr.date = $date
+        MERGE (dr)-[:DERIVED_FROM]->(src)
+        WITH dr
+        MATCH (doc:Document {id: $doc_id})
+        MERGE (doc)-[:CONTAINS_DRAFT]->(dr)
+        """
+        graph.query(
+            draft_cypher,
+            {
+                "source_id": draft.source.source_id,
+                "source_file": draft.source.file_path,
+                "chunk_offset": draft.source.chunk_offset,
+                "snippet": draft.source.snippet,
+                "date": draft.date,
+                "draft_id": draft.draft_id,
+                "topic": draft.topic,
+                "recommendation": draft.recommendation,
+                "doc_id": doc_id,
+                "content_hash": content_hash,
+            },
+        )
+        if author_id:
+            graph.query(
+                "MATCH (dr:DraftRecommendation {id: $draft_id}), (p:Person {id: $author_id}) MERGE (p)-[:AUTHORED]->(dr)",
+                {"draft_id": draft.draft_id, "author_id": author_id},
+            )
 
 
 def ingest_chat_messages(chats_dir: str = "data/chats") -> None:

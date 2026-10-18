@@ -11,6 +11,7 @@ Technical Terms:
   tickets (and blocked tickets), and responsible team members.
 """
 
+import hashlib
 import json
 import os
 import sys
@@ -26,11 +27,15 @@ from orgmind.db import get_graph, query_graph
 from orgmind.resolve import resolver
 
 
-def preview_decision(raw_payload_or_path: str | Path | dict[str, Any]) -> dict[str, Any]:
+def preview_decision(
+    raw_payload_or_path: str | Path | dict[str, Any],
+    workspace_id: str | None = None,
+) -> dict[str, Any]:
     """Inspects a proposed decision payload against current graph state WITHOUT mutating.
 
     Args:
         raw_payload_or_path: Path to JSON decision file or raw dictionary payload.
+        workspace_id: Optional workspace partition identifier.
 
     Returns:
         Structured preview dictionary detailing:
@@ -57,22 +62,30 @@ def preview_decision(raw_payload_or_path: str | Path | dict[str, Any]) -> dict[s
     decided_by = data.get("decided_by")
     timestamp = data.get("timestamp") or datetime.now(UTC).isoformat()
     src = data.get("source", {})
+    supersedes_id = data.get("supersedes_id")
 
     # Check if already exists in graph (idempotency preview)
     existing_check = query_graph(
         "MATCH (d:Decision {id: $id}) RETURN d.id AS id, d.text AS text, d.status AS status",
         {"id": new_decision_id},
+        workspace_id=workspace_id,
     )
     already_committed = len(existing_check) > 0 and existing_check[0]["text"] == text
 
-    # Query currently active decision for this topic
+    # Query currently active candidate decision to supersede
     candidate_rows = query_graph(
         """
         MATCH (old:Decision)
-        WHERE (toLower(old.topic) = toLower($topic)
-               OR (old)-[:ABOUT]->(:Topic {name: $topic}))
+        WHERE (
+            ($supersedes_id IS NOT NULL AND old.id = $supersedes_id)
+            OR (
+                $supersedes_id IS NULL
+                AND (toLower(old.topic) = toLower($topic) OR (old)-[:ABOUT]->(:Topic {name: $topic}))
+                AND old.id <> $new_id
+                AND (old.valid_from IS NULL OR old.valid_from < $timestamp)
+            )
+        )
           AND old.status = 'current'
-          AND old.id <> $new_id
         OPTIONAL MATCH (old)-[:DERIVED_FROM]->(src:Source)
         OPTIONAL MATCH (old)-[:DECIDED_BY]->(p:Person)
         RETURN old.id AS id,
@@ -85,7 +98,13 @@ def preview_decision(raw_payload_or_path: str | Path | dict[str, Any]) -> dict[s
                src.text_snippet AS source_snippet
         LIMIT 1
         """,
-        {"topic": topic, "new_id": new_decision_id or ""},
+        {
+            "topic": topic,
+            "new_id": new_decision_id or "",
+            "timestamp": timestamp,
+            "supersedes_id": supersedes_id,
+        },
+        workspace_id=workspace_id,
     )
     superseded_candidate = candidate_rows[0] if candidate_rows else None
 
@@ -98,6 +117,7 @@ def preview_decision(raw_payload_or_path: str | Path | dict[str, Any]) -> dict[s
         LIMIT 5
         """,
         {"topic": topic},
+        workspace_id=workspace_id,
     )
 
     action = "SUPERSEDE" if superseded_candidate else "CREATE"
@@ -136,36 +156,60 @@ def apply_decision(
     chunk_offset: int = 0,
     decided_by_person_id: str | None = None,
     timestamp: str | None = None,
+    supersedes_id: str | None = None,
+    workspace_id: str | None = None,
 ) -> dict[str, Any]:
-    """Inserts a new decision, attaches its mandatory Source node, and supersedes any existing current decision on the topic.
+    """Inserts a new decision, attaches its mandatory Source node, and supersedes any existing active decision on the topic.
 
     Integrity rules enforced:
     1. Decision must be linked to at least one Source node via [:DERIVED_FROM].
-    2. Any existing Decision with status='current' for this topic will have its status
+    2. Any existing Decision with status='current' candidate will have its status
        changed to 'superseded', valid_to set to timestamp, and a [:SUPERSEDES] edge created.
+    3. Supersession NEVER applies to older or equal-timestamp decisions (old.valid_from < timestamp).
+    4. Sets full v0.2 Domain Model fields natively on Source and Decision.
     """
     if timestamp is None:
         timestamp = datetime.now(UTC).isoformat()
 
-    graph = get_graph()
+    graph = get_graph(workspace_id)
+    content_hash = hashlib.sha256(source_snippet.encode("utf-8")).hexdigest()
+    origin_type = (
+        "document"
+        if "doc" in source_file.lower()
+        else ("chat" if "chat" in source_file.lower() else "decision_record")
+    )
 
     # Cypher query combining creation, source attachment, and superseding link
     cypher_mutation = """
-    // 1. Locate any currently active decision for this topic
+    // 1. Locate candidate decision to supersede:
+    // If explicit supersedes_id is provided, match that candidate.
+    // Otherwise, match active decision on the same topic ONLY IF old.valid_from < $timestamp.
     OPTIONAL MATCH (old:Decision)
-    WHERE (toLower(old.topic) = toLower($topic)
-           OR (old)-[:ABOUT]->(:Topic {name: $topic}))
-      AND old.status = 'current'
-      AND old.id <> $decision_id
+    WHERE (
+        ($supersedes_id IS NOT NULL AND old.id = $supersedes_id)
+        OR (
+            $supersedes_id IS NULL
+            AND (toLower(old.topic) = toLower($topic) OR (old)-[:ABOUT]->(:Topic {name: $topic}))
+            AND old.id <> $decision_id
+            AND (old.valid_from IS NULL OR old.valid_from < $timestamp)
+        )
+    )
+    AND old.status = 'current'
     SET old.status = "superseded",
         old.valid_to = $timestamp
 
-    // 2. Create or update the new Source node (provenance)
+    // 2. Create or update the new Source node with full v0.2 enterprise properties
     MERGE (src:Source {id: $source_id})
     SET src.file_path = $source_file,
         src.chunk_offset = $chunk_offset,
         src.text_snippet = $source_snippet,
-        src.created_at = $timestamp
+        src.created_at = $timestamp,
+        src.content_hash = $content_hash,
+        src.visibility = '["all"]',
+        src.redacted = false,
+        src.origin_type = $origin_type,
+        src.valid_from = $timestamp,
+        src.valid_to = ""
 
     // 3. Create or update the new Decision node
     MERGE (new:Decision {id: $decision_id})
@@ -173,7 +217,12 @@ def apply_decision(
         new.text = $text,
         new.status = "current",
         new.valid_from = $timestamp,
-        new.valid_to = ""
+        new.valid_to = "",
+        new.confidence = 1.0,
+        new.confidence_tier = "High",
+        new.review_status = "approved",
+        new.extracted_by = "doc_ingest",
+        new.recorded_at = $timestamp
 
     // 4. Connect Decision to Source (provenance edge)
     MERGE (new)-[:DERIVED_FROM]->(src)
@@ -182,7 +231,7 @@ def apply_decision(
     MERGE (top:Topic {name: $topic})
     MERGE (new)-[:ABOUT]->(top)
 
-    // 6. If an older active decision existed, create SUPERSEDES relationship
+    // 6. If an older active decision was superseded, create SUPERSEDES relationship
     FOREACH (_ IN CASE WHEN old IS NOT NULL THEN [1] ELSE [] END |
         CREATE (new)-[:SUPERSEDES {superseded_at: $timestamp}]->(old)
     )
@@ -201,6 +250,9 @@ def apply_decision(
         "chunk_offset": chunk_offset,
         "source_snippet": source_snippet,
         "decision_id": decision_id,
+        "content_hash": content_hash,
+        "origin_type": origin_type,
+        "supersedes_id": supersedes_id,
     }
 
     result = graph.query(cypher_mutation, params)
@@ -229,7 +281,10 @@ def apply_decision(
     }
 
 
-def commit_decision(payload_or_preview_or_path: str | Path | dict[str, Any]) -> dict[str, Any]:
+def commit_decision(
+    payload_or_preview_or_path: str | Path | dict[str, Any],
+    workspace_id: str | None = None,
+) -> dict[str, Any]:
     """Commits a decision payload to the graph with idempotency checks.
 
     If the decision ID already exists in the graph with the exact same text:
@@ -248,6 +303,7 @@ def commit_decision(payload_or_preview_or_path: str | Path | dict[str, Any]) -> 
                 "text": p.get("text"),
                 "decided_by": p.get("decided_by"),
                 "timestamp": p.get("timestamp"),
+                "supersedes_id": payload_or_preview_or_path.get("superseded_decision_candidate", {}).get("id") if payload_or_preview_or_path.get("superseded_decision_candidate") else None,
                 "source": {
                     "source_id": s.get("source_id"),
                     "file_path": s.get("file_path"),
@@ -264,11 +320,13 @@ def commit_decision(payload_or_preview_or_path: str | Path | dict[str, Any]) -> 
     topic = data.get("topic", "")
     text = data.get("text", "")
     src = data.get("source", {})
+    supersedes_id = data.get("supersedes_id")
 
     # IDEMPOTENCY CHECK:
     existing = query_graph(
         "MATCH (d:Decision {id: $id}) RETURN d.id AS id, d.text AS text, d.status AS status",
         {"id": decision_id},
+        workspace_id=workspace_id,
     )
     if existing and existing[0]["text"] == text:
         return {
@@ -288,10 +346,15 @@ def commit_decision(payload_or_preview_or_path: str | Path | dict[str, Any]) -> 
         chunk_offset=src.get("chunk_offset", 0),
         decided_by_person_id=data.get("decided_by"),
         timestamp=data.get("timestamp"),
+        supersedes_id=supersedes_id,
+        workspace_id=workspace_id,
     )
 
 
-def impact_analysis(topic_or_decision_id: str) -> dict[str, Any]:
+def impact_analysis(
+    topic_or_decision_id: str,
+    workspace_id: str | None = None,
+) -> dict[str, Any]:
     """Performs multi-hop Cypher traversal to analyze how a decision impacts the company.
 
     Traverses:
@@ -299,6 +362,7 @@ def impact_analysis(topic_or_decision_id: str) -> dict[str, Any]:
 
     Args:
         topic_or_decision_id: Either a topic name ('Paynova') or Decision ID ('DEC_PAYMENTS_...').
+        workspace_id: Tenant workspace identifier for isolated graph access.
 
     Returns:
         Structured impact report containing:
@@ -318,6 +382,7 @@ def impact_analysis(topic_or_decision_id: str) -> dict[str, Any]:
         dec_topic_rows = query_graph(
             "MATCH (d:Decision {id: $id})-[:ABOUT]->(top:Topic) RETURN top.name AS topic",
             {"id": clean_target},
+            workspace_id=workspace_id,
         )
         if dec_topic_rows:
             topic = dec_topic_rows[0]["topic"]
@@ -345,6 +410,7 @@ def impact_analysis(topic_or_decision_id: str) -> dict[str, Any]:
         ORDER BY d.valid_from DESC
         """,
         {"topic": topic},
+        workspace_id=workspace_id,
     )
 
     current_decision = next((d for d in decision_rows if d["status"] == "current"), None)
@@ -372,7 +438,7 @@ def impact_analysis(topic_or_decision_id: str) -> dict[str, Any]:
            blocker.id AS blocked_by_id,
            blocker.title AS blocked_by_title
     """
-    ticket_rows = query_graph(tickets_query, {"topic": topic})
+    ticket_rows = query_graph(tickets_query, {"topic": topic}, workspace_id=workspace_id)
 
     # 3. Blocked Tickets: find tickets blocked by any tickets associated with this topic
     blocked_query = """
@@ -388,7 +454,7 @@ def impact_analysis(topic_or_decision_id: str) -> dict[str, Any]:
            tk.title AS blocker_title,
            coalesce(p.name, p_auth.name, 'Unassigned') AS assignee_or_author
     """
-    blocked_rows = query_graph(blocked_query, {"topic": topic})
+    blocked_rows = query_graph(blocked_query, {"topic": topic}, workspace_id=workspace_id)
 
     # 4. Affected Projects
     project_map: dict[str, dict[str, Any]] = {}
@@ -410,6 +476,7 @@ def impact_analysis(topic_or_decision_id: str) -> dict[str, Any]:
             RETURN owner.name AS owner_name, lead.name AS lead_name
             """,
             {"pid": pid},
+            workspace_id=workspace_id,
         )
         if proj_meta:
             project_map[pid]["owner"] = proj_meta[0].get("owner_name")
@@ -499,11 +566,14 @@ def impact_analysis(topic_or_decision_id: str) -> dict[str, Any]:
     }
 
 
-def ingest_live_decision(file_path: str = "data/live/new_billing_decision.json") -> dict[str, Any]:
+def ingest_live_decision(
+    file_path: str = "data/live/new_billing_decision.json",
+    workspace_id: str | None = None,
+) -> dict[str, Any]:
     """Reads a live decision file from /data/live and executes the superseding pipeline.
     Used for Demo Moment C.
     """
-    return commit_decision(file_path)
+    return commit_decision(file_path, workspace_id=workspace_id)
 
 
 def calculate_staleness(

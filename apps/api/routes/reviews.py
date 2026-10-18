@@ -130,10 +130,12 @@ def act_on_review_item(
                 chunk_offset=0,
                 decided_by_person_id=decided_by,
                 timestamp=now_iso,
+                supersedes_id=payload_data.get("supersedes_id"),
+                workspace_id=ctx.workspace_id,
             )
 
             # Multi-hop impact analysis
-            impact_res = impact_analysis(topic)
+            impact_res = impact_analysis(topic, workspace_id=ctx.workspace_id)
 
             payload_data["graph_execution"] = {
                 "status": "applied",

@@ -23,7 +23,7 @@
 | **Tool: trace_decision** | **REALLY WORKS** | `trace_decision('OAuth') -> Decision DEC_AUTH_2026_01, Source SRC_DOC_AUTH_01`<br/>`trace_decision('authentication') -> DEC_AUTH_2026_01` (synonym resolution) | Multi-hop OPTIONAL MATCH with synonym mapping and substring fallback. |
 | **Tool: compare_draft_vs_decision** | **REALLY WORKS** | `compare_draft_vs_decision('Paynova')`<br/>Draft: Rohan Iyer (2026-02-24, `SRC_DOC_DRAFT_PAYNOVA_EVAL`) vs Ratified Decision: Priya Sharma (2026-03-01, `SRC_DOC_PAYNOVA_DECISION_01`). | Surfaces dissenting architectural proposals, unheeded warnings, and trade-off rationales. |
 | **Freshness & Superseding** | **REALLY WORKS** | `scripts/test_live_pipeline.py` PASSED 100%.<br/>`preview_decision`: detects target superseding candidate without DB mutation.<br/>`commit_decision`: creates :SUPERSEDES edge and attaches Source.<br/>`impact_analysis`: multi-hop traversal finds affected and blocked tickets.<br/>Idempotent re-run returns `noop_idempotent` with identical node/edge counts. | Fully verified live-update pipeline with non-destructive versioning and multi-hop impact traversal. |
-| **Citation Enforcement** | **REALLY WORKS** | Regex citation extractor + FalkorDB graph validator + automatic grounding repair.<br/>Verifies cited sources exist in FalkorDB; appends verified sources footer if LLM omits markdown tags.<br/>Enforces strict honest boundary on no-evidence queries (`"I couldn't find this in the company graph."`). | Zero hallucinations. 100% grounded against graph source nodes. |
+| **Citation Enforcement** | **REALLY WORKS** | Regex citation extractor + FalkorDB graph validator + automatic grounding repair.<br/>Verifies cited sources exist in FalkorDB; appends verified sources footer if LLM omits markdown tags.<br/>Enforces strict honest boundary on no-evidence queries (`"I couldn't find this in the company graph."`). | Grounded citation tracing with SHA-256 content hashes verified against FalkorDB Source nodes. Honest refusal path exists for queries without graph evidence. |
 | **Model Evaluation Harness** | **REALLY WORKS** | `tests/run_eval.py --model --limit --output`<br/>Measures turn latency, tool-matching, keyword presence, and citation validity.<br/>Generated `tests/eval_report_ollama_qwen2.5-coder_14b.json` (3/3 100% pass rate). | Supports any LiteLLM model provider (Ollama, OpenAI, Gemini, Anthropic). |
 | **Simulated Actions** | **REALLY WORKS** | `create_ticket`, `draft_message`, `assign_task`<br/>`confirm=False`: returns structured action proposal without DB write.<br/>`confirm=True`: writes simulated node to FalkorDB. | Two-phase safety workflow for human-in-the-loop action execution. |
 | **Streamlit User Interface** | **REALLY WORKS** | `curl -I http://localhost:8501/` returned `HTTP/1.1 200 OK`. Interactive Pyvis graph renders in-memory HTML. | Tested in browser. UI explainability panel needed in Phase 5. |
@@ -582,7 +582,7 @@ PS C:\Users\sauja\Downloads\New folder> python scripts/preflight.py
    - Zero hard-coded hostnames or ports.
 2. **Multi-Tenant Workspace Isolation Guard (`packages/core/orgmind/db.py`)**:
    - Deterministic workspace-to-graph mapping: `get_workspace_graph_name(workspace_id) -> 'org_<id>'`.
-   - Cross-workspace graph access is impossible by construction; each workspace strictly queries its own graph partition.
+   - Tenant workspaces are isolated at query time; each workspace strictly queries its own dedicated graph partition.
    - Verified via automated test `tests/test_workspace_isolation.py` (proves Workspace B receives 0 results when querying Workspace A's entities).
 3. **App Relational Database & RBAC (`packages/core/orgmind/models.py`)**:
    - SQLAlchemy 2.0 models for `User`, `Workspace`, `Membership`, `AuditLog`.
@@ -841,7 +841,7 @@ PS C:\Users\sauja\Downloads\New folder> python scripts/preflight.py
 
 1. **Modern Frontend Stack (`apps/web`)**:
    - Next.js 14 (App Router), React 18, TypeScript, Tailwind CSS, Lucide icons, Cytoscape.js.
-   - High-contrast, WCAG 2.2 AA compliant palette with dark slate text, clear hierarchy, and responsive layout.
+   - High-contrast color palette with semantic HTML hierarchy, skip navigation links, and responsive layouts (automated WCAG AA audit pending CI axe suite).
    - API proxy rewrites in `next.config.mjs` routing `/api/:path*` directly to FastAPI (`http://localhost:8000/api/:path*`).
 2. **Clear Synthetic Baseline Banner (Global Rule 8)**:
    - Sticky global header includes explicit indicator: `Sample Baseline: Northwind Labs (Clean Base)`.
@@ -849,7 +849,7 @@ PS C:\Users\sauja\Downloads\New folder> python scripts/preflight.py
 3. **Core Feature 1: Ask Brain (`apps/web/src/app/page.tsx`)**:
    - Live Server-Sent Events (SSE) streaming with realtime reasoning step cards (`step`, `tool_call`, `token`).
    - Grounding validation badge (`ok`, `repaired`, `blocked`) ensuring Rule 5 compliance.
-   - Grounded Citation Inspection Drawer: clicking inline citation badges opens the exact source excerpt, origin file, and cryptographic content hash.
+   - Grounded Citation Inspection Drawer: clicking inline citation badges opens the exact source excerpt, origin file, and verified SHA-256 content hash.
    - Two-phase action confirmation modal (Rule 7) for proposed mutating actions (`create_ticket`, `draft_message`, `assign_task`).
 4. **Core Feature 2: Interactive Knowledge Graph Explorer (`apps/web/src/app/graph/page.tsx`)**:
    - Interactive Cytoscape.js visualization with custom color coding by entity type (`Person`, `Project`, `Team`, `Decision`, `Ticket`, `Document`, `Topic`).
@@ -860,7 +860,7 @@ PS C:\Users\sauja\Downloads\New folder> python scripts/preflight.py
 5. **Core Feature 3: Decision Lineage & Supersession Tree (`apps/web/src/app/decisions/page.tsx`)**:
    - Visual supersession lineage tree showing previous superseded policies, active decisions, and replacement decisions.
    - Bitemporal real-world validity intervals (`valid_from`, `valid_to`).
-   - Cryptographic source anchors displaying source identifiers, file origins, and SHA-256 hashes.
+   - Verified source anchors displaying source identifiers, file origins, and SHA-256 hashes.
 6. **Core Feature 4: Human-in-the-Loop Review Queue (`apps/web/src/app/reviews/page.tsx`)**:
    - Filterable table (`pending`, `approved`, `rejected`, `all`).
    - Side-by-side Before (Current Graph State) vs. After (Proposed Extraction) diff views.

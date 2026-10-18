@@ -1,6 +1,8 @@
 # Decision Record: Core US Billing Engine & Stripe Checkout
 
 - **Document ID**: DOC_BILLING_SPEC
+- **Decision ID**: DEC_BILLING_2026_01
+- **Topic**: Billing
 - **Author**: Bob Martinez (Tech Lead Backend)
 - **Date**: 2026-01-20
 - **Project**: PRJ_BILLING_STRIPE

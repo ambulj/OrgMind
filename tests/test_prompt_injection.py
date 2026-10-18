@@ -69,15 +69,18 @@ def test_unauthorized_source_citation_blocked():
         'SET s.visibility = \'["Admin", "Auditor"]\', s.redacted = false'
     )
 
-    restricted_id = "SRC_RESTRICTED_CONFIDENTIAL_01"
-    val = validate_citations_against_graph(
-        cited_ids=[restricted_id],
-        returned_source_ids=[restricted_id],
-        caller_role=Role.VIEWER.value,
-        workspace_id="default",
-    )
-    assert val["is_grounded"] is False
-    assert restricted_id in val["permission_denied"]
+    try:
+        restricted_id = "SRC_RESTRICTED_CONFIDENTIAL_01"
+        val = validate_citations_against_graph(
+            cited_ids=[restricted_id],
+            returned_source_ids=[restricted_id],
+            caller_role=Role.VIEWER.value,
+            workspace_id="default",
+        )
+        assert val["is_grounded"] is False
+        assert restricted_id in val["permission_denied"]
+    finally:
+        graph.query("MATCH (s:Source {id: 'SRC_RESTRICTED_CONFIDENTIAL_01'}) DELETE s")
 
 
 def test_role_gated_tool_allowlists():

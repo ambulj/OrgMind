@@ -1,6 +1,7 @@
 """Agent tools exposing graph querying, bitemporal As-Of navigation, permission filtering, and simulated actions."""
 
 import json
+import re
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -47,7 +48,7 @@ def who_owns(
     resolved_query = synonyms.get(clean_query.lower(), clean_query)
     if resolved_query == clean_query:
         for syn_k, syn_v in synonyms.items():
-            if syn_k in clean_query.lower():
+            if re.search(rf"\b{re.escape(syn_k)}\b", clean_query, re.IGNORECASE):
                 resolved_query = syn_v
                 break
 
@@ -180,33 +181,38 @@ def who_knows_about(
     """
     clean_topic = topic.strip()
 
-    # Check if the query is a person name or handle (e.g. 'Pri' for Priya Sharma)
-    from orgmind.resolve import EntityResolver
+    # Check if the query is a person name or handle directly in the active graph
+    person_lookup = query_graph(
+        "MATCH (p:Person) WHERE p.id = $q OR toLower(p.name) = toLower($q) RETURN p.id AS id, p.name AS name, p.role AS role LIMIT 1",
+        {"q": clean_topic},
+        workspace_id=workspace_id,
+    )
+    if person_lookup:
+        p_row = person_lookup[0]
+        pid = p_row["id"]
+        person_name = p_row["name"]
+        role = p_row.get("role") or "Engineer"
 
-    resolver = EntityResolver()
-    person_match = resolver.resolve_with_status(clean_topic)
-    if person_match.get("resolved_id"):
-        pid = person_match["resolved_id"]
-        person_info = resolver.id_to_person.get(pid, {})
-        person_name = person_info.get("name", clean_topic)
-        role = person_info.get("role", "Engineer")
-
-        # Query all topics this person knows about
+        # Query verified topics this person authored with caller permission filtering
         p_cypher = """
         MATCH (p:Person {id: $pid})-[:AUTHORED]->(item)-[:MENTIONS|ABOUT]->(top:Topic)
-        RETURN top.name AS topic_name, count(item) AS count
+        OPTIONAL MATCH (item)-[:DERIVED_FROM]->(src:Source)
+        WHERE src IS NULL OR (NOT src.redacted AND (src.visibility = 'all' OR src.visibility = '["all"]' OR src.visibility CONTAINS '"all"' OR src.visibility CONTAINS ('"' + $caller_role + '"') OR $caller_role = 'Admin'))
+        RETURN top.name AS topic_name, count(DISTINCT item) AS count
         """
-        topic_rows = query_graph(p_cypher, {"pid": pid}, workspace_id=workspace_id)
+        topic_rows = query_graph(p_cypher, {"pid": pid, "caller_role": caller_role}, workspace_id=workspace_id)
         topic_list = [r["topic_name"] for r in topic_rows if r.get("topic_name")]
+        evidence_count = sum(r["count"] for r in topic_rows)
+        real_score = min(10.0, round(float(evidence_count) * 1.5, 1))
 
         ranked_experts = [
             {
                 "person_id": pid,
                 "person_name": person_name,
                 "role": role,
-                "weighted_score": 10.0,
-                "evidence_count": len(topic_rows),
-                "confidence_tier": "High",
+                "weighted_score": real_score,
+                "evidence_count": evidence_count,
+                "confidence_tier": "High" if real_score >= 6.0 else "Medium",
                 "evidence_breakdown": {"topics": topic_list},
                 "sample_evidence": topic_list,
             }
@@ -238,13 +244,15 @@ def who_knows_about(
     resolved_topic = topic_synonyms.get(clean_topic.lower(), clean_topic)
     if resolved_topic == clean_topic:
         for syn_k, syn_v in topic_synonyms.items():
-            if syn_k in clean_topic.lower():
+            if re.search(rf"\b{re.escape(syn_k)}\b", clean_topic, re.IGNORECASE):
                 resolved_topic = syn_v
                 break
 
     cypher = """
     MATCH (p:Person)-[:AUTHORED]->(item)-[:MENTIONS|ABOUT]->(top:Topic)
     WHERE toLower(top.name) = toLower($topic)
+    OPTIONAL MATCH (item)-[:DERIVED_FROM]->(src:Source)
+    WHERE src IS NULL OR (NOT src.redacted AND (src.visibility = 'all' OR src.visibility = '["all"]' OR src.visibility CONTAINS '"all"' OR src.visibility CONTAINS ('"' + $caller_role + '"') OR $caller_role = 'Admin'))
     RETURN p.id AS person_id, p.name AS person_name, p.role AS role,
            labels(item)[0] AS item_type, item.id AS item_id,
            coalesce(item.created_at, item.valid_from, '') AS created_at
@@ -257,17 +265,23 @@ def who_knows_about(
     UNION
     MATCH (d:Decision)-[:DECIDED_BY]->(p:Person)
     WHERE toLower(d.topic) = toLower($topic) OR (d)-[:ABOUT]->(:Topic {name: $topic})
+    OPTIONAL MATCH (d)-[:DERIVED_FROM]->(src:Source)
+    WHERE src IS NULL OR (NOT src.redacted AND (src.visibility = 'all' OR src.visibility = '["all"]' OR src.visibility CONTAINS '"all"' OR src.visibility CONTAINS ('"' + $caller_role + '"') OR $caller_role = 'Admin'))
     RETURN p.id AS person_id, p.name AS person_name, p.role AS role,
            'Decision' AS item_type, d.id AS item_id,
            coalesce(d.valid_from, '') AS created_at
     UNION
     MATCH (p:Person)-[:AUTHORED]->(dr:DraftRecommendation)
     WHERE toLower(dr.topic) = toLower($topic)
+    OPTIONAL MATCH (dr)-[:DERIVED_FROM]->(src:Source)
+    WHERE src IS NULL OR (NOT src.redacted AND (src.visibility = 'all' OR src.visibility = '["all"]' OR src.visibility CONTAINS '"all"' OR src.visibility CONTAINS ('"' + $caller_role + '"') OR $caller_role = 'Admin'))
     RETURN p.id AS person_id, p.name AS person_name, p.role AS role,
            'DraftRecommendation' AS item_type, dr.id AS item_id,
            coalesce(dr.draft_date, '') AS created_at
     """
-    rows = query_graph(cypher, {"topic": resolved_topic}, workspace_id=workspace_id)
+    rows = query_graph(
+        cypher, {"topic": resolved_topic, "caller_role": caller_role}, workspace_id=workspace_id
+    )
 
     if not rows:
         fallback_cypher = """
@@ -411,10 +425,10 @@ def trace_decision(
     WHERE toLower(top.name) = toLower($topic)
        OR toLower(d.topic) = toLower($topic)
     OPTIONAL MATCH (d)-[:DERIVED_FROM]->(src:Source)
-    WHERE (NOT src.redacted) AND (src.visibility CONTAINS 'all' OR src.visibility CONTAINS $caller_role)
+    WHERE (NOT src.redacted) AND (src.visibility = 'all' OR src.visibility = '["all"]' OR src.visibility CONTAINS '"all"' OR src.visibility CONTAINS ('"' + $caller_role + '"') OR $caller_role = 'Admin')
     OPTIONAL MATCH (d)-[:SUPERSEDES]->(old:Decision)
     OPTIONAL MATCH (old)-[:DERIVED_FROM]->(old_src:Source)
-    WHERE (NOT old_src.redacted) AND (old_src.visibility CONTAINS 'all' OR old_src.visibility CONTAINS $caller_role)
+    WHERE (NOT old_src.redacted) AND (old_src.visibility = 'all' OR old_src.visibility = '["all"]' OR old_src.visibility CONTAINS '"all"' OR old_src.visibility CONTAINS ('"' + $caller_role + '"') OR $caller_role = 'Admin')
     RETURN d.id AS decision_id,
            d.text AS decision_text,
            d.status AS status,
@@ -438,14 +452,15 @@ def trace_decision(
         fallback_cypher = """
         MATCH (d:Decision)
         OPTIONAL MATCH (d)-[:ABOUT]->(top:Topic)
+        WITH d, top
         WHERE (top IS NOT NULL AND (toLower(top.name) CONTAINS toLower($topic) OR toLower($topic) CONTAINS toLower(top.name)))
-           OR toLower(d.topic) CONTAINS toLower($topic)
-           OR toLower(d.text) CONTAINS toLower($topic)
+           OR (d.topic IS NOT NULL AND toLower(d.topic) CONTAINS toLower($topic))
+           OR (d.text IS NOT NULL AND toLower(d.text) CONTAINS toLower($topic))
         OPTIONAL MATCH (d)-[:DERIVED_FROM]->(src:Source)
-        WHERE (NOT src.redacted) AND (src.visibility CONTAINS 'all' OR src.visibility CONTAINS $caller_role)
+        WHERE (NOT src.redacted) AND (src.visibility = 'all' OR src.visibility = '["all"]' OR src.visibility CONTAINS '"all"' OR src.visibility CONTAINS ('"' + $caller_role + '"') OR $caller_role = 'Admin')
         OPTIONAL MATCH (d)-[:SUPERSEDES]->(old:Decision)
         OPTIONAL MATCH (old)-[:DERIVED_FROM]->(old_src:Source)
-        WHERE (NOT old_src.redacted) AND (old_src.visibility CONTAINS 'all' OR old_src.visibility CONTAINS $caller_role)
+        WHERE (NOT old_src.redacted) AND (old_src.visibility = 'all' OR old_src.visibility = '["all"]' OR old_src.visibility CONTAINS '"all"' OR old_src.visibility CONTAINS ('"' + $caller_role + '"') OR $caller_role = 'Admin')
         RETURN d.id AS decision_id,
                d.text AS decision_text,
                d.status AS status,
@@ -500,7 +515,7 @@ def what_changed_since(
     MATCH (d:Decision)
     WHERE d.valid_from >= $since_date
     OPTIONAL MATCH (d)-[:DERIVED_FROM]->(src:Source)
-    WHERE (NOT src.redacted) AND (src.visibility CONTAINS 'all' OR src.visibility CONTAINS $caller_role)
+    WHERE (NOT src.redacted) AND (src.visibility = 'all' OR src.visibility = '["all"]' OR src.visibility CONTAINS '"all"' OR src.visibility CONTAINS ('"' + $caller_role + '"') OR $caller_role = 'Admin')
     OPTIONAL MATCH (d)-[:DECIDED_BY]->(p:Person)
     RETURN "Decision" AS change_type,
            d.id AS item_id,
@@ -561,7 +576,7 @@ def get_source(
     """
     cypher = """
     MATCH (s:Source {id: $source_id})
-    WHERE (NOT s.redacted) AND (s.visibility CONTAINS 'all' OR s.visibility CONTAINS $caller_role)
+    WHERE (NOT s.redacted) AND (s.visibility = 'all' OR s.visibility = '["all"]' OR s.visibility CONTAINS '"all"' OR s.visibility CONTAINS ('"' + $caller_role + '"') OR $caller_role = 'Admin')
     RETURN s.id AS source_id,
            s.file_path AS file_path,
            s.chunk_offset AS chunk_offset,
@@ -599,14 +614,19 @@ def get_source(
 def find_related(
     entity_id_or_name: str,
     hops: int = 2,
+    caller_role: str = Role.VIEWER.value,
     workspace_id: str | None = None,
 ) -> dict[str, Any]:
-    """Explores neighboring nodes connected to an entity up to N hops away."""
+    """Explores neighboring nodes connected to an entity up to N hops away, respecting caller role permissions."""
     hops = max(1, min(hops, 3))
     cypher = f"""
     MATCH (start)
     WHERE start.id = $entity OR toLower(start.name) = toLower($entity)
     MATCH path = (start)-[*1..{hops}]-(neighbor)
+    WHERE labels(neighbor)[0] <> 'Source' OR (
+        NOT coalesce(neighbor.redacted, false) AND 
+        (neighbor.visibility = 'all' OR neighbor.visibility = '["all"]' OR neighbor.visibility CONTAINS '"all"' OR neighbor.visibility CONTAINS ('"' + $caller_role + '"') OR $caller_role = 'Admin')
+    )
     RETURN DISTINCT labels(neighbor)[0] AS neighbor_type,
                     neighbor.id AS neighbor_id,
                     coalesce(neighbor.name, neighbor.title, neighbor.text, neighbor.id) AS label,
@@ -614,7 +634,7 @@ def find_related(
                     length(path) AS distance
     LIMIT 60
     """
-    rows = query_graph(cypher, {"entity": entity_id_or_name}, workspace_id=workspace_id)
+    rows = query_graph(cypher, {"entity": entity_id_or_name, "caller_role": caller_role}, workspace_id=workspace_id)
     return {
         "entity": entity_id_or_name,
         "hops": hops,
@@ -655,7 +675,7 @@ def compare_draft_vs_decision(
        OR toLower($topic) CONTAINS toLower(dr.topic)
     OPTIONAL MATCH (p:Person)-[:AUTHORED]->(dr)
     OPTIONAL MATCH (dr)-[:DERIVED_FROM]->(src:Source)
-    WHERE (NOT src.redacted) AND (src.visibility CONTAINS 'all' OR src.visibility CONTAINS $caller_role)
+    WHERE (NOT src.redacted) AND (src.visibility = 'all' OR src.visibility = '["all"]' OR src.visibility CONTAINS '"all"' OR src.visibility CONTAINS ('"' + $caller_role + '"') OR $caller_role = 'Admin')
     OPTIONAL MATCH (doc:Document)-[:CONTAINS_DRAFT]->(dr)
     RETURN dr.id AS draft_id,
            dr.topic AS topic,
@@ -682,7 +702,7 @@ def compare_draft_vs_decision(
        OR (d)-[:ABOUT]->(:Topic {name: $topic})
     OPTIONAL MATCH (d)-[:DECIDED_BY]->(p:Person)
     OPTIONAL MATCH (d)-[:DERIVED_FROM]->(src:Source)
-    WHERE (NOT src.redacted) AND (src.visibility CONTAINS 'all' OR src.visibility CONTAINS $caller_role)
+    WHERE (NOT src.redacted) AND (src.visibility = 'all' OR src.visibility = '["all"]' OR src.visibility CONTAINS '"all"' OR src.visibility CONTAINS ('"' + $caller_role + '"') OR $caller_role = 'Admin')
     OPTIONAL MATCH (d)-[:SUPERSEDES]->(old:Decision)
     RETURN d.id AS decision_id,
            d.text AS decision_text,

@@ -94,21 +94,24 @@ def test_in_query_permission_filtering() -> None:
         },
     )
 
-    # 1. Viewer attempt -> Must be denied / not returned by Cypher query
-    viewer_res = get_source(test_src_id, caller_role=Role.VIEWER.value)
-    assert viewer_res["found"] is False
-    err_msg = viewer_res.get("error", "").lower()
-    assert "access denied" in err_msg or "permission denied" in err_msg or "not found" in err_msg
+    try:
+        # 1. Viewer attempt -> Must be denied / not returned by Cypher query
+        viewer_res = get_source(test_src_id, caller_role=Role.VIEWER.value)
+        assert viewer_res["found"] is False
+        err_msg = viewer_res.get("error", "").lower()
+        assert "access denied" in err_msg or "permission denied" in err_msg or "not found" in err_msg
 
-    # 2. Editor attempt -> Must also be denied
-    editor_res = get_source(test_src_id, caller_role=Role.EDITOR.value)
-    assert editor_res["found"] is False
+        # 2. Editor attempt -> Must also be denied
+        editor_res = get_source(test_src_id, caller_role=Role.EDITOR.value)
+        assert editor_res["found"] is False
 
-    # 3. Admin attempt -> Permitted
-    admin_res = get_source(test_src_id, caller_role=Role.ADMIN.value)
-    assert admin_res["found"] is True
-    assert admin_res["source"]["content_hash"] == content_hash
-    assert admin_res["source"]["text_snippet"] == raw_content
+        # 3. Admin attempt -> Permitted
+        admin_res = get_source(test_src_id, caller_role=Role.ADMIN.value)
+        assert admin_res["found"] is True
+        assert admin_res["source"]["content_hash"] == content_hash
+        assert admin_res["source"]["text_snippet"] == raw_content
+    finally:
+        graph.query("MATCH (s:Source {id: $id}) DELETE s", {"id": test_src_id})
 
 
 def test_redaction_tombstone_and_audit() -> None:
@@ -134,41 +137,44 @@ def test_redaction_tombstone_and_audit() -> None:
         },
     )
 
-    # Execute redaction tombstone
-    actor = "usr_dpo_officer_01"
-    reason = "GDPR Article 17 Right to Erasure request"
-    redact_res = redact_source(
-        source_id=test_src_id,
-        reason=reason,
-        actor=actor,
-    )
-    assert redact_res["status"] == "success"
-    assert redact_res["content_hash"] == content_hash
-
-    # Verify node in FalkorDB
-    node_rows = query_graph(
-        "MATCH (s:Source {id: $id}) RETURN s.text_snippet AS snippet, s.redacted AS redacted, s.content_hash AS hash",
-        {"id": test_src_id},
-    )
-    assert len(node_rows) == 1
-    assert node_rows[0]["redacted"] is True
-    assert f"[REDACTED: {reason}]" in node_rows[0]["snippet"]
-    assert "4111" not in node_rows[0]["snippet"]
-    assert node_rows[0]["hash"] == content_hash
-
-    # Verify relational AuditLog entry
-    session_factory = get_session_factory()
-    with session_factory() as session:
-        log_entry = (
-            session.query(AuditLog)
-            .filter_by(action="redact_source")
-            .order_by(AuditLog.timestamp.desc())
-            .first()
+    try:
+        # Execute redaction tombstone
+        actor = "usr_dpo_officer_01"
+        reason = "GDPR Article 17 Right to Erasure request"
+        redact_res = redact_source(
+            source_id=test_src_id,
+            reason=reason,
+            actor=actor,
         )
-        assert log_entry is not None
-        assert log_entry.actor_id == actor
-        assert log_entry.entity_id == test_src_id
-        assert reason in (log_entry.reason or "")
+        assert redact_res["status"] == "success"
+        assert redact_res["content_hash"] == content_hash
+
+        # Verify node in FalkorDB
+        node_rows = query_graph(
+            "MATCH (s:Source {id: $id}) RETURN s.text_snippet AS snippet, s.redacted AS redacted, s.content_hash AS hash",
+            {"id": test_src_id},
+        )
+        assert len(node_rows) == 1
+        assert node_rows[0]["redacted"] is True
+        assert f"[REDACTED: {reason}]" in node_rows[0]["snippet"]
+        assert "4111" not in node_rows[0]["snippet"]
+        assert node_rows[0]["hash"] == content_hash
+
+        # Verify relational AuditLog entry
+        session_factory = get_session_factory()
+        with session_factory() as session:
+            log_entry = (
+                session.query(AuditLog)
+                .filter_by(action="redact_source")
+                .order_by(AuditLog.timestamp.desc())
+                .first()
+            )
+            assert log_entry is not None
+            assert log_entry.actor_id == actor
+            assert log_entry.entity_id == test_src_id
+            assert reason in (log_entry.reason or "")
+    finally:
+        graph.query("MATCH (s:Source {id: $id}) DELETE s", {"id": test_src_id})
 
 
 def test_merge_candidates_never_merge_silently() -> None:

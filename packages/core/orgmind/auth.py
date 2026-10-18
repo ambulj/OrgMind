@@ -42,27 +42,37 @@ class WorkspaceContext:
 
 
 def hash_password(password: str, salt: str | None = None) -> str:
-    """Hashes a password using PBKDF2-HMAC-SHA256 with cryptographic salt."""
+    """Hashes a password using PBKDF2-HMAC-SHA256 with 600,000 iterations (OWASP guidance)."""
     if salt is None:
         salt = secrets.token_hex(16)
+    iterations = getattr(settings, "PBKDF2_ITERATIONS", 600_000)
     key = hashlib.pbkdf2_hmac(
         "sha256",
         password.encode("utf-8"),
         salt.encode("utf-8"),
-        100_000,
+        iterations,
     )
-    return f"{salt}${key.hex()}"
+    return f"{salt}${iterations}${key.hex()}"
 
 
 def verify_password(plain_password: str, stored_hash: str) -> bool:
-    """Verifies a plain password against a stored PBKDF2 hash using constant-time comparison."""
+    """Verifies a plain password against stored PBKDF2 hash, supporting both legacy and 600k iteration formats."""
     try:
-        salt, expected_hex = stored_hash.split("$", 1)
+        parts = stored_hash.split("$")
+        if len(parts) == 3:
+            salt, iterations_str, expected_hex = parts
+            iterations = int(iterations_str)
+        elif len(parts) == 2:
+            salt, expected_hex = parts
+            iterations = 100_000  # Legacy fallback
+        else:
+            return False
+
         actual_hex = hashlib.pbkdf2_hmac(
             "sha256",
             plain_password.encode("utf-8"),
             salt.encode("utf-8"),
-            100_000,
+            iterations,
         ).hex()
         return hmac.compare_digest(actual_hex, expected_hex)
     except Exception:
@@ -88,12 +98,12 @@ def create_access_token(
         "exp": expire,
         "iat": datetime.now(UTC),
     }
-    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    return jwt.encode(payload, settings.get_jwt_secret(), algorithm=settings.JWT_ALGORITHM)
 
 
 def decode_access_token(token: str) -> dict[str, Any]:
     """Decodes and cryptographically validates a JWT session token."""
-    return jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+    return jwt.decode(token, settings.get_jwt_secret(), algorithms=[settings.JWT_ALGORITHM])
 
 
 # OIDC / SSO Integration Interface

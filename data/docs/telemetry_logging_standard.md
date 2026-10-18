@@ -1,6 +1,8 @@
 # Engineering Standard: OpenTelemetry Structured JSON Logging
 
 - **Document ID**: DOC_TELEMETRY_STANDARD
+- **Decision ID**: DEC_TELEMETRY_2026_01
+- **Topic**: Architecture
 - **Author**: Bob Martinez (Tech Lead Backend)
 - **Date**: 2026-02-18
 - **Project**: PRJ_OAUTH_UPGRADE

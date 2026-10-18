@@ -53,6 +53,14 @@ def reset_northwind_graph(graph_name: str = "northwind_labs") -> bool:
     print("\n--- Running Unstructured Ingestion ---")
     run_all_unstructured_ingestion()
 
+    # Run v0.2 Domain Upgrade Pass to guarantee visibility, hashes, and bitemporal dates
+    print("\n--- Running v0.2 Domain Upgrade Pass ---")
+    try:
+        from migrate_v02_domain import migrate_domain_v02
+    except ImportError:
+        from scripts.migrate_v02_domain import migrate_domain_v02
+    migrate_domain_v02(graph_name)
+
     # Verify counts
     node_cnt = query_graph("MATCH (n) RETURN count(n) AS cnt")[0]["cnt"]
     edge_cnt = query_graph("MATCH ()-[r]->() RETURN count(r) AS cnt")[0]["cnt"]

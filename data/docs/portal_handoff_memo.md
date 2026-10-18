@@ -1,6 +1,8 @@
 # Leadership Handoff Memo: Customer Portal Ownership Transfer
 
 - **Document ID**: DOC_PORTAL_HANDOFF_MEMO
+- **Decision ID**: DEC_PORTAL_2026_02
+- **Topic**: Frontend
 - **Author**: Carol Danvers (Senior Product Manager) & Frank Wright (Frontend Lead)
 - **Date**: 2026-03-15
 - **Project**: PRJ_PORTAL_REDESIGN

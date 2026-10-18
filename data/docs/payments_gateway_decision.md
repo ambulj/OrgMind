@@ -1,6 +1,8 @@
 # Meeting Notes: European Payment Rail Ratification
 
 - **Document ID**: DOC_PAYMENTS_GATEWAY_DECISION
+- **Decision ID**: DEC_PAYMENTS_2026_03_PAYNOVA
+- **Topic**: Paynova
 - **Author**: Priya Sharma (Payments Engineering Lead)
 - **Date**: 2026-03-01
 - **Project**: PRJ_BILLING_STRIPE

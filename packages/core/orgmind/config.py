@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     # FalkorDB Graph Database
     FALKORDB_HOST: str = "localhost"
     FALKORDB_PORT: int = 6379
-    FALKORDB_PASSWORD: str | None = "ZXM5TTZZGTMK"
+    FALKORDB_PASSWORD: str | None = None
     FALKORDB_GRAPH_NAME: str = "northwind_labs"
     FALKORDB_DEFAULT_READONLY: bool = False
 
@@ -33,10 +33,19 @@ class Settings(BaseSettings):
     REDIS_JOBS_URL: str = "redis://localhost:6380/0"
     REDIS_URL: str = "redis://localhost:6380/0"
 
-    # Authentication & Session Security
-    JWT_SECRET_KEY: str = "orgmind-super-secret-key-for-development-change-in-production-32bytes"
+    # Authentication & Session Security (OWASP: 600,000 PBKDF2 iterations, reasonable JWT expiry)
+    JWT_SECRET_KEY: str | None = None
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24 hours
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 120  # 2 hours default
+    PBKDF2_ITERATIONS: int = 600_000
+
+    def get_jwt_secret(self) -> str:
+        """Returns the JWT secret or raises in production if not set."""
+        if self.JWT_SECRET_KEY:
+            return self.JWT_SECRET_KEY
+        if self.ENV.lower() in ("development", "test", "dev"):
+            return "orgmind-dev-insecure-secret-key-32bytes-minimum"
+        raise ValueError("CRITICAL: JWT_SECRET_KEY environment variable MUST be set in production mode.")
 
     # LLM Model Configuration
     LLM_MODEL: str = "ollama/qwen2.5-coder:14b"

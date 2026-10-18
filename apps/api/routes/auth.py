@@ -62,9 +62,9 @@ def register(payload: RegisterRequest, session: Session = Depends(get_db_session
         session.add(default_ws)
         session.flush()
 
-    # Assign initial role as Admin if first user, else Editor
+    # First registered user is Admin (for initial bootstrapping); all subsequent users are Viewers by default
     user_count = session.query(User).count()
-    assigned_role = Role.ADMIN.value if user_count <= 1 else Role.EDITOR.value
+    assigned_role = Role.ADMIN.value if user_count <= 1 else Role.VIEWER.value
 
     membership = Membership(
         user_id=user.id,

@@ -35,10 +35,21 @@ def get_workspace_graph_name(workspace_id: str | None = None) -> str:
     return f"org_{clean_id}" if not clean_id.startswith("org_") else clean_id
 
 
+_CACHED_CLIENT: FalkorDB | None = None
+
+
 def get_db_client() -> FalkorDB:
-    """Creates and returns a connection client to the FalkorDB server.
+    """Returns a cached, pooled connection client to the FalkorDB server.
     Uses settings from pydantic-settings configuration with graceful password fallback.
     """
+    global _CACHED_CLIENT
+    if _CACHED_CLIENT is not None:
+        try:
+            _CACHED_CLIENT.connection.ping()
+            return _CACHED_CLIENT
+        except Exception:
+            _CACHED_CLIENT = None
+
     host = settings.FALKORDB_HOST
     port = settings.FALKORDB_PORT
     password = settings.FALKORDB_PASSWORD if settings.FALKORDB_PASSWORD else None
@@ -46,11 +57,14 @@ def get_db_client() -> FalkorDB:
     try:
         client = FalkorDB(host=host, port=port, password=password)
         client.connection.ping()
+        _CACHED_CLIENT = client
         return client
     except Exception as e:
         if "without any password configured" in str(e) or "WRONGPASS" in str(e):
             # FalkorDB instance has no password configured; auto-fallback to passwordless
-            return FalkorDB(host=host, port=port, password=None)
+            client = FalkorDB(host=host, port=port, password=None)
+            _CACHED_CLIENT = client
+            return client
         raise
 
 

@@ -1,6 +1,8 @@
 # Architecture Decision Record: OAuth 2.1 & Keycloak Migration
 
 - **Document ID**: DOC_AUTH_SPEC
+- **Decision ID**: DEC_AUTH_2026_01
+- **Topic**: OAuth
 - **Author**: Alice Chen (Principal Architect)
 - **Date**: 2026-01-15
 - **Project**: PRJ_OAUTH_UPGRADE

@@ -1,6 +1,8 @@
 # Infrastructure Architecture: Multi-Region Kubernetes Topology
 
 - **Document ID**: DOC_K8S_SPEC
+- **Decision ID**: DEC_K8S_2026_01
+- **Topic**: Kubernetes
 - **Author**: David Kim (DevOps Engineer)
 - **Date**: 2026-02-05
 - **Project**: PRJ_K8S_MIGRATION
