@@ -18,11 +18,29 @@ setup:
 	python -m pip install -e .
 
 dev:
+	@echo "Starting fullstack development environment..."
+	@echo "API: make dev-api"
+	@echo "Web: make dev-web"
+	@echo "Worker: make dev-worker"
+
+dev-api:
+	python -m uvicorn apps.api.main:app --host 0.0.0.0 --port 8000 --reload
+
+dev-web:
+	cd apps/web && npm run dev
+
+dev-worker:
+	python -m apps.worker.main
+
+dev-legacy:
 	python -m streamlit run apps/legacy-streamlit/streamlit_app.py --server.port 8501
 
 test:
-	python -m pytest tests/
+	python -m pytest tests/ -v
 	python scripts/smoke_test.py
+
+test-eval:
+	python tests/run_eval.py --limit 10
 
 lint:
 	python -m ruff check packages/core apps scripts tests
@@ -41,5 +59,18 @@ seed:
 reset:
 	python scripts/reset_demo.py
 
+backup:
+	python scripts/backup_restore.py backup --graph northwind_labs --file data/backups/graph_backup.json
+
+restore:
+	python scripts/backup_restore.py restore --graph northwind_labs --file data/backups/graph_backup.json
+
+compose-up:
+	docker compose --profile fullstack up --build
+
+compose-down:
+	docker compose --profile fullstack down
+
 preflight:
 	python scripts/preflight.py
+

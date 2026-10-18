@@ -1,156 +1,213 @@
-# 🧠 OrgMind: Company Brain & Knowledge Graph
+# 🧠 OrgMind: Enterprise Company Brain & Knowledge Graph Platform
 
-[![Track](https://img.shields.io/badge/Hackathon-Track%203%3A%20Company%20Brain-blue.svg)](#)
-[![Graph Database](https://img.shields.io/badge/Database-FalkorDB-red.svg)](https://docs.falkordb.com)
-[![LLM Router](https://img.shields.io/badge/LLM-LiteLLM-green.svg)](https://github.com/BerriAI/litellm)
-[![UI](https://img.shields.io/badge/UI-Streamlit%20%2B%20Pyvis-orange.svg)](#)
+[![Monorepo](https://img.shields.io/badge/Monorepo-Packages%20%26%20Apps-blue.svg)](#)
+[![Graph Database](https://img.shields.io/badge/Graph-FalkorDB%20(OpenCypher)-red.svg)](https://docs.falkordb.com)
+[![App Database](https://img.shields.io/badge/App%20DB-PostgreSQL%2016-blue.svg)](https://www.postgresql.org)
+[![Worker Queue](https://img.shields.io/badge/Worker-arq%20%2B%20Redis%207-darkgreen.svg)](https://arq-docs.helpmanual.io/)
+[![API](https://img.shields.io/badge/API-FastAPI%20(REST%20%26%20SSE)-teal.svg)](https://fastapi.tiangolo.com)
+[![Web](https://img.shields.io/badge/Frontend-Next.js%2014%20%2B%20Tailwind%20%2B%20Cytoscape-black.svg)](https://nextjs.org)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](#)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue.svg)](#)
 
-> **OrgMind** connects people, teams, projects, documents, and decisions into a single high-performance knowledge graph powered by **FalkorDB**. An autonomous agent answers questions, traces decisions with exact citations, tracks superseding changes in real time, and executes simulated company actions.
-
----
-
-## 🌟 Key Capabilities
-
-1. **Unified Graph**: Connects structured data (people, teams, projects) and unstructured knowledge (architecture specs, Jira tickets, Slack chats) into one graph.
-2. **Who Owns & Who Knows**: Identifies project leads and ranks people by factual evidence of knowledge across documents and chats.
-3. **Decision Lineage & Provenance**: Every decision is linked to an immutable `Source` node with exact text chunks and file origins.
-4. **Non-Destructive Freshness**: When a new decision is made, the old decision is never deleted; it is marked `superseded` and linked via `[:SUPERSEDES]` to preserve the historical audit trail.
-5. **Strict Grounding & Zero Hallucination**: The agent answers exclusively from retrieved graph facts with citations. If no evidence exists, it states: *"I couldn't find this in the company graph."*
-6. **Simulated Workflows**: Drafts messages and creates tickets directly into the graph.
+> **OrgMind** connects people, teams, projects, documents, tickets, chats, and decisions in one unified knowledge graph powered by **FalkorDB**. An autonomous agent answers complex organizational questions with cryptographic citation grounding, bitemporal governance, live freshness supersession, and role-gated two-phase actions.
 
 ---
 
-## 📁 Repository Structure
+## 🏛️ Target Architecture & Monorepo Layout
+
+OrgMind is structured as a clean, enterprise monorepo:
 
 ```text
-├── ARCHITECTURE.md          # System architecture, glossary, Mermaid diagram
-├── SCHEMA.md                # Node/edge definitions, indexes, 5 verified Cypher queries
-├── SETUP.md                 # Step-by-step setup guide for Windows, Mac & Linux
-├── TASKS.md                 # 36-hour sprint plan divided between Person A and Person B
-├── DEMO_PLAN.md             # 3-minute hackathon presentation script with 4 demo moments
-├── docker-compose.yml       # Local FalkorDB container & optional MCP server
-├── requirements.txt         # Python dependencies
-├── .env.example             # Environment configuration template
+├── packages/
+│   └── core/                     # Reusable orgmind domain package
+│       ├── orgmind/
+│       │   ├── agent.py          # Provider-agnostic LiteLLM tool loop with grounding validator
+│       │   ├── auth.py           # Multi-tenant RBAC (Admin, Editor, Viewer, Auditor) & JWT
+│       │   ├── config.py         # Type-safe pydantic-settings configuration
+│       │   ├── db.py             # FalkorDB connection pool & parameterized Cypher query runner
+│       │   ├── freshness.py      # Bitemporal decision supersession & multi-hop impact analysis
+│       │   ├── ingest/           # 8-stage retryable pipeline & connector interfaces
+│       │   ├── models.py         # SQLAlchemy app models (Workspaces, Users, AuditLog, ReviewItem)
+│       │   ├── resolve.py        # Entity resolution with alias merging and unknown handle flags
+│       │   ├── tools.py          # Allow-listed Cypher query tools
+│       │   └── mcp_server.py     # FastMCP tool server with 11 standard enterprise tools
+│       └── pyproject.toml
 │
-├── data/                    # Synthetic company dataset (Northwind Labs)
-│   ├── people.csv           # Master employee records & handles
-│   ├── teams.csv            # Teams & department leads
-│   ├── projects.csv         # Active initiatives
-│   ├── tickets.json         # Issue tracker data
-│   ├── docs/                # Architecture decision records (.md)
-│   ├── chats/               # Team communications (.jsonl)
-│   └── live/                # Live decision update payload for demo
+├── apps/
+│   ├── api/                      # FastAPI v1 REST & SSE streaming server
+│   │   ├── main.py               # Application entrypoint & global error envelope
+│   │   ├── routes/               # Modular routes: /ask, /graph, /decisions, /reviews, etc.
+│   │   ├── dependencies.py       # Role gating & workspace context injectors
+│   │   └── schemas.py            # Strict Pydantic v2 contract schemas
+│   │
+│   ├── web/                      # Next.js 14 Enterprise Web Application
+│   │   ├── src/app/              # App Router: Ask Brain, Graph Explorer, Decision Lineage, Reviews
+│   │   ├── src/lib/              # Typed SSE streaming client & API utilities
+│   │   └── package.json          # Next.js 14, React 18, Tailwind CSS, Cytoscape.js
+│   │
+│   ├── worker/                   # Background asynchronous worker (arq + Redis)
+│   │   └── main.py               # Worker entrypoint running pipeline ingestion jobs
+│   │
+│   └── legacy-streamlit/         # Archived Streamlit prototype (kept for reference)
+│       ├── streamlit_app.py
+│       └── ARCHIVED.md           # Archival notice & feature parity matrix
 │
-├── orgmind/                 # Core Python backend package
-│   ├── db.py                # FalkorDB connection, index creation & smoke test
-│   ├── ingest_structured.py # Loads CSVs and tickets into FalkorDB
-│   ├── ingest_unstructured.py # LLM extraction -> validated schema -> Source nodes
-│   ├── resolve.py           # Entity resolution (handles & aliases to canonical IDs)
-│   ├── freshness.py         # Decision superseding & non-destructive freshness logic
-│   ├── tools.py             # Agent tools (who_owns, trace_decision, create_ticket, etc.)
-│   ├── mcp_server.py        # Custom FastMCP server exposing tools to external clients
-│   └── agent.py             # Provider-agnostic LiteLLM tool-calling agent with citation guard
+├── infra/                        # Infrastructure & container configs
+│   ├── docker-compose.yml        # Multi-container orchestration (FalkorDB, Postgres, Redis, API, Web)
+│   └── Dockerfile.api            # Production containerfile for API & Worker
 │
-├── app/
-│   └── streamlit_app.py     # 2-column UI (Chat + Source Inspector + Pyvis Network)
+├── data/                         # Synthetic baseline dataset (Northwind Labs)
+│   ├── people.csv, teams.csv, projects.csv, tickets.json
+│   ├── docs/                     # Architecture Decision Records (.md)
+│   ├── chats/                    # Communication transcripts (.jsonl)
+│   └── live/                     # Live decision update payloads
 │
-└── tests/
-    ├── test_questions.json  # Benchmark evaluation questions with expected outcomes
-    └── run_eval.py          # Automated evaluation scoring harness
+├── docs/                         # Architecture, API specifications, and governance
+│   ├── API.md                    # Detailed API endpoint reference
+│   ├── openapi.json              # Exported OpenAPI 3.1 schema (24 endpoints)
+│   ├── CONNECTORS.md             # Enterprise connector contracts (Slack, Drive, Jira, GitHub)
+│   ├── MIGRATIONS.md             # Alembic & FalkorDB migration guides
+│   ├── ARCHITECTURE.md           # System architecture & Mermaid flow diagrams
+│   └── SETUP.md                  # Development environment setup guide
+│
+├── scripts/                      # Operational utilities
+│   ├── smoke_test.py             # FalkorDB & Cypher smoke verification
+│   ├── preflight.py              # 7-subsystem automated health check
+│   ├── backup_restore.py         # Per-graph JSON dump and restore tool
+│   └── reset_demo.py             # Safe database reset to clean baseline
+│
+├── tests/                        # 48 Automated unit, security & ingestion tests
+│   ├── test_api.py               # FastAPI endpoint contract & SSE streaming tests
+│   ├── test_prompt_injection.py  # Security suite verifying untrusted delimiters & citation blocks
+│   ├── test_ingestion_service.py # Pipeline idempotency, file upload & review queue tests
+│   └── run_eval.py               # 24-question benchmark evaluation harness
+│
+├── Makefile                      # Standardized developer task runner
+├── pyproject.toml                # Monorepo dependencies & tool configs (Ruff, Mypy, Pytest)
+└── STATUS.md                     # Honest truth audit & acceptance verification logs
 ```
 
 ---
 
-## 🚀 Quick Start (3 Steps)
+## ⚡ Global Enterprise Rules
 
-### 1. Launch FalkorDB via Docker
-```bash
-docker run -p 6379:6379 -p 3000:3000 --name falkordb -d falkordb/falkordb:latest
-```
+1. **Evidence-Based Acceptance**: Never claim "done" without executing acceptance commands and recording real output in [`STATUS.md`](file:///c:/Users/sauja/Downloads/New%20folder/STATUS.md).
+2. **OpenCypher Subset Compliance**: Parameterize all queries against FalkorDB; end-users never execute raw Cypher queries.
+3. **Never Delete History**: Superseding updates `status="superseded"` and `valid_to`. Deletions use **Redaction Tombstones** (blank Source text, keep graph structure, log who/when/why).
+4. **Cryptographic Citation Grounding**: Every answer claim must cite a Source ID that exists in FalkorDB, was returned by a tool in that turn, and is visible to the caller's role.
+5. **Untrusted Data Boundary**: Documents and chat transcripts are untrusted data. Tool outputs and extraction inputs are enclosed in strict delimiters (`=== BEGIN UNTRUSTED DATA ===`) with prompt-injection defense.
+6. **Two-Phase Action Governance**: Mutating actions (`create_ticket`, `draft_message`, `assign_task`) are propose-then-confirm, role-gated, and logged to an immutable audit log.
+7. **Clear Synthetic Labeling**: Synthetic sample datasets are clearly marked across the UI (`Synthetic Baseline: Northwind Labs`).
 
-### 2. Install Dependencies & Configure
+---
+
+## 🚀 Quick Start
+
+### 1. Prerequisites
+- **Python**: 3.11 or higher
+- **Node.js**: 18+ (tested on Node 20 / 24)
+- **Docker**: For running FalkorDB, PostgreSQL, and Redis
+
+### 2. Local Setup
 ```bash
+# Clone the repository
+cd "New folder"
+
+# Set up Python virtual environment
 python -m venv venv
-# On Windows:
-.\venv\Scripts\activate
-# On Mac/Linux:
-source venv/bin/activate
+.\venv\Scripts\activate       # On Windows
+# source venv/bin/activate     # On Mac/Linux
 
-pip install -r requirements.txt
-cp .env.example .env
-# Edit .env with your LLM API Key (OpenAI, Anthropic, or Gemini)
+# Install dependencies in editable mode
+make setup
+
+# Configure environment variables
+copy .env.example .env
 ```
 
-### 3. Bootstrap & Launch
+### 3. Start Database Containers
 ```bash
-# 1. Verify connection & indexes
-python orgmind/db.py
-
-# 2. Ingest structured and unstructured data into FalkorDB
-python orgmind/ingest_structured.py
-python orgmind/ingest_unstructured.py
-
-# 3. Run Preflight Health Check (verifies DB, graph baseline, MCP, assets)
-python scripts/preflight.py
-
-# 4. Launch Streamlit UI
-streamlit run app/streamlit_app.py
+docker compose up -d falkordb postgres redis
 ```
-Open [http://localhost:8501](http://localhost:8501) in your browser.
 
----
-
-## 🔌 Model Context Protocol (MCP) Server
-
-OrgMind exposes its entire company brain capabilities over the open **Model Context Protocol** (FastMCP / MCPServer):
+### 4. Run Tests & Preflight
 ```bash
-# Run standalone MCP server over stdio (compatible with Claude Desktop, Cursor, AGY):
-python orgmind/mcp_server.py
+# Execute the complete 48-test suite
+make test
 
-# Run MCP verification suite:
-python scripts/test_mcp_client.py
+# Run the 7-point subsystem preflight check
+make preflight
 ```
 
-Exposed MCP Tools:
-- `who_owns`: Finds project leads and team ownership.
-- `who_knows_about`: Ranks members by weighted evidence score (specs = 3.0, tickets = 2.0, chats = 1.0).
-- `trace_decision`: Traces active and historical superseded decisions with source file links.
-- `compare_draft_vs_decision`: Compares dissenting preliminary drafts against ratified policies.
-- `impact_analysis`: Multi-hop graph traversal surfacing affected tickets, projects, and blockers.
-- `create_ticket`, `draft_message`, `assign_task`: Human-in-the-loop action proposals (`confirm=False`).
-
----
-
-## 🧪 Benchmark Evaluation Harness
-
-Validate the agent against the complete benchmark test set:
+### 5. Launch Fullstack Development Environment
 ```bash
-# Run benchmark on all questions:
-python tests/run_eval.py --limit 6
+# Terminal 1: Launch FastAPI backend (port 8000)
+make dev-api
 
-# Specify model or custom report:
-python tests/run_eval.py --model ollama/qwen2.5-coder:14b --output tests/benchmark_report.json
+# Terminal 2: Launch Next.js web application (port 3000)
+make dev-web
+
+# Terminal 3: Launch arq background worker
+make dev-worker
+```
+Open **[http://localhost:3000](http://localhost:3000)** in your browser.
+
+---
+
+## 🌐 Fullstack Docker Compose Deployment
+
+To deploy the entire production stack in Docker with one command:
+
+```bash
+docker compose --profile fullstack up --build
+```
+
+| Service | Container Name | Port | Description |
+| :--- | :--- | :--- | :--- |
+| **FalkorDB** | `orgmind_falkordb` | `6379`, `3002` | Primary Knowledge Graph with AOF/RDB persistence |
+| **PostgreSQL** | `orgmind_postgres` | `5432` | Relational store for users, workspaces, jobs & audit logs |
+| **Redis** | `orgmind_redis_jobs` | `6380` | Dedicated queue for background ingestion worker |
+| **FastAPI** | `orgmind_api` | `8000` | REST & SSE API with Swagger UI at `/docs` |
+| **Worker** | `orgmind_worker` | - | Asynchronous pipeline ingestion worker (`arq`) |
+| **Next.js Web** | `orgmind_web` | `3000` | Production React 18 web application |
+
+---
+
+## 🧪 Testing & Verification Suites
+
+```bash
+# Run all unit, security & integration tests
+pytest tests/ -v
+
+# Run prompt-injection defense suite
+pytest tests/test_prompt_injection.py -v
+
+# Run 24-question benchmark evaluation harness
+python tests/run_eval.py --limit 10
+
+# Code quality & type checks
+make lint
+make typecheck
 ```
 
 ---
 
-## 🏆 Hackathon Track 3 Judging Criteria Alignment
+## 🔒 Security & RBAC Matrix
 
-| Track 3 Judging Requirement | OrgMind Implementation | Verification Command |
-| :--- | :--- | :--- |
-| **1. All in ONE Graph** | FalkorDB models People, Teams, Projects, Docs, Tickets, Decisions, and Chats in `northwind_labs`. | `python orgmind/db.py` |
-| **2. Who Owns & Who Knows** | Range-indexed ownership queries + weighted evidence ranking breaking near-ties. | `python scripts/test_tools_phase4.py` |
-| **3. Tracing Decisions** | Verbatim provenance chunks linked via `Source` nodes; zero hallucinations. | `python tests/run_eval.py --limit 3` |
-| **4. Non-Destructive Freshness** | `[:SUPERSEDES]` relationships preserve full corporate memory audit trail. | `python scripts/test_live_pipeline.py` |
-| **5. Multi-Hop Dependency & Action** | Traverses blocker chains (`BLOCKED_BY`) and proposes human-confirmed actions. | `python scripts/test_mcp_client.py` |
+| Role | Ask Brain | Graph Explorer | Upload Docs | Approve Reviews | Execute Actions | View Audit Log |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Admin** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Editor** | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **Viewer** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **Auditor**| ✅ | ✅ | ❌ | ❌ | ❌ | ✅ |
 
 ---
 
-## 📖 Key Documentation Links
-- [System Architecture](ARCHITECTURE.md)
-- [Graph Schema & Cypher Queries](SCHEMA.md)
-- [Setup Instructions](SETUP.md)
-- [36-Hour Hackathon Plan](TASKS.md)
-- [Demo Presentation Script](DEMO_PLAN.md)
-- [Current Project Status & Evidence](STATUS.md)
+## 📚 Key Documentation
 
+- [`docs/API.md`](docs/API.md): API documentation for all REST & SSE streaming endpoints.
+- [`docs/openapi.json`](docs/openapi.json): Full OpenAPI 3.1 contract specification.
+- [`docs/CONNECTORS.md`](docs/CONNECTORS.md): Specifications for Slack, Google Drive, Jira, and GitHub.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md): Architectural topology and data flow diagrams.
+- [`docs/MIGRATIONS.md`](docs/MIGRATIONS.md): Alembic database migrations and FalkorDB graph schema evolution.
+- [`STATUS.md`](STATUS.md): Complete truth audit and verification command outputs across all phases.

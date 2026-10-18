@@ -98,7 +98,7 @@ services:
       context: ..
       dockerfile: infra/Dockerfile.api
     container_name: orgmind_worker
-    command: ["python", "-m", "orgmind.worker"]
+    command: ["python", "-m", "apps.worker.main"]
     environment:
       - FALKORDB_HOST=falkordb
       - FALKORDB_PORT=6379

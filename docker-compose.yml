@@ -1,0 +1,138 @@
+services:
+  # 1. Primary Knowledge Graph Database Engine (FalkorDB)
+  falkordb:
+    image: falkordb/falkordb:latest
+    container_name: orgmind_falkordb
+    command: >
+      --requirepass ${FALKORDB_PASSWORD:-ZXM5TTZZGTMK}
+      --appendonly yes
+      --appendfsync everysec
+      --dir /var/lib/falkordb/data
+    ports:
+      - "6379:6379"
+      - "3002:3000" # FalkorDB Web Browser mapped to 3002 to avoid collision with Next.js web app
+    volumes:
+      - falkordb_data:/var/lib/falkordb/data
+    environment:
+      - FALKORDB_PASSWORD=${FALKORDB_PASSWORD:-ZXM5TTZZGTMK}
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${FALKORDB_PASSWORD:-ZXM5TTZZGTMK}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  # 2. Relational Application Database (PostgreSQL 16)
+  postgres:
+    image: postgres:16-alpine
+    container_name: orgmind_postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-orgmind}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-orgmind_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-orgmind}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-orgmind} -d ${POSTGRES_DB:-orgmind}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  # 3. Background Job Queue (Dedicated Redis 7, strictly separate from FalkorDB)
+  redis:
+    image: redis:7-alpine
+    container_name: orgmind_redis_jobs
+    ports:
+      - "6380:6379" # Host 6380 mapped to container 6379
+    volumes:
+      - redis_jobs_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+    restart: unless-stopped
+
+  # 4. FastAPI Backend Application Service
+  api:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile.api
+    container_name: orgmind_api
+    ports:
+      - "8000:8000"
+    environment:
+      - FALKORDB_HOST=falkordb
+      - FALKORDB_PORT=6379
+      - FALKORDB_PASSWORD=${FALKORDB_PASSWORD:-ZXM5TTZZGTMK}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-orgmind}:${POSTGRES_PASSWORD:-orgmind_secret}@postgres:5432/${POSTGRES_DB:-orgmind}
+      - REDIS_JOBS_URL=redis://redis:6379/0
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-orgmind-super-secret-key-for-development-change-in-production-32bytes}
+      - LLM_MODEL=${LLM_MODEL:-ollama/qwen2.5-coder:14b}
+    depends_on:
+      falkordb:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    profiles:
+      - fullstack
+
+  # 5. Background Asynchronous Worker Service
+  worker:
+    build:
+      context: .
+      dockerfile: infra/Dockerfile.api
+    container_name: orgmind_worker
+    command: ["python", "-m", "apps.worker.main"]
+    environment:
+      - FALKORDB_HOST=falkordb
+      - FALKORDB_PORT=6379
+      - FALKORDB_PASSWORD=${FALKORDB_PASSWORD:-ZXM5TTZZGTMK}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-orgmind}:${POSTGRES_PASSWORD:-orgmind_secret}@postgres:5432/${POSTGRES_DB:-orgmind}
+      - REDIS_JOBS_URL=redis://redis:6379/0
+    depends_on:
+      falkordb:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    profiles:
+      - fullstack
+
+  # 6. Next.js Web Frontend Service
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: orgmind_web
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - api
+    restart: unless-stopped
+    profiles:
+      - fullstack
+
+volumes:
+  falkordb_data:
+  postgres_data:
+  redis_jobs_data:

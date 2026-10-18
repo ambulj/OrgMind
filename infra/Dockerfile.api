@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml /app/
 COPY packages/core /app/packages/core
 COPY apps/api /app/apps/api
+COPY apps/worker /app/apps/worker
 
 # Install dependencies in editable mode
 RUN pip install --no-cache-dir --upgrade pip && \
