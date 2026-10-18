@@ -19,3 +19,12 @@ app/graph_temp.html
 *.db
 *.sqlite3
 *.sqlite
+
+# Node & Next.js
+node_modules/
+.next/
+out/
+.vercel
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

@@ -829,6 +829,70 @@ PS C:\Users\sauja\Downloads\New folder> python scripts/preflight.py
 - **Smoke Test**: **ALL CHECKS PASSED (EXIT 0)**
 - **Legacy Streamlit App**: **HTTP 200 OK**
 
+---
+
+## 🎨 Phase 7 Complete: Next.js 14 Web Application (UI/UX)
+
+**Date**: 2026-10-18  
+**Status**: **REALLY WORKS**  
+**Commit**: Pending Phase 7 Commit  
+
+### Highlights & Architecture Implemented
+
+1. **Modern Frontend Stack (`apps/web`)**:
+   - Next.js 14 (App Router), React 18, TypeScript, Tailwind CSS, Lucide icons, Cytoscape.js.
+   - High-contrast, WCAG 2.2 AA compliant palette with dark slate text, clear hierarchy, and responsive layout.
+   - API proxy rewrites in `next.config.mjs` routing `/api/:path*` directly to FastAPI (`http://localhost:8000/api/:path*`).
+2. **Clear Synthetic Baseline Banner (Global Rule 8)**:
+   - Sticky global header includes explicit indicator: `Sample Baseline: Northwind Labs (Clean Base)`.
+   - Tenant switcher context indicator displaying active workspace (`org_default`) and caller role (`Admin`).
+3. **Core Feature 1: Ask Brain (`apps/web/src/app/page.tsx`)**:
+   - Live Server-Sent Events (SSE) streaming with realtime reasoning step cards (`step`, `tool_call`, `token`).
+   - Grounding validation badge (`ok`, `repaired`, `blocked`) ensuring Rule 5 compliance.
+   - Grounded Citation Inspection Drawer: clicking inline citation badges opens the exact source excerpt, origin file, and cryptographic content hash.
+   - Two-phase action confirmation modal (Rule 7) for proposed mutating actions (`create_ticket`, `draft_message`, `assign_task`).
+4. **Core Feature 2: Interactive Knowledge Graph Explorer (`apps/web/src/app/graph/page.tsx`)**:
+   - Interactive Cytoscape.js visualization with custom color coding by entity type (`Person`, `Project`, `Team`, `Decision`, `Ticket`, `Document`, `Topic`).
+   - Two operational modes:
+     - **Neighborhood Exploration**: Center entity N-hop traversal (1-3 hops) with optional bitemporal `as_of` timestamp.
+     - **Semantic Shortest Path**: Graph traversal finding shortest path between any two entities.
+   - Entity Inspector Drawer: click any node to view metadata, raw properties, and a one-click button to re-center the neighborhood.
+5. **Core Feature 3: Decision Lineage & Supersession Tree (`apps/web/src/app/decisions/page.tsx`)**:
+   - Visual supersession lineage tree showing previous superseded policies, active decisions, and replacement decisions.
+   - Bitemporal real-world validity intervals (`valid_from`, `valid_to`).
+   - Cryptographic source anchors displaying source identifiers, file origins, and SHA-256 hashes.
+6. **Core Feature 4: Human-in-the-Loop Review Queue (`apps/web/src/app/reviews/page.tsx`)**:
+   - Filterable table (`pending`, `approved`, `rejected`, `all`).
+   - Side-by-side Before (Current Graph State) vs. After (Proposed Extraction) diff views.
+   - Approve & Supersede action with real-time modal displaying downstream impact analysis (affected tickets, blocked tickets, responsible personnel).
+7. **Core Feature 5: Document Ingestion & Connector Manager (`apps/web/src/app/ingestion/page.tsx`)**:
+   - Drag-and-drop document upload supporting `.md`, `.txt`, and `.pdf` files.
+   - Sync vs. Async pipeline execution toggle.
+   - One-click trigger for built-in sample connector (`sample_data`).
+   - Ingestion jobs history table tracking status, items processed, and errors.
+8. **Core Feature 6: Governance Audit Log (`apps/web/src/app/audit/page.tsx`)**:
+   - Immutable audit log query interface with filters for actor, action, and entity type.
+   - Diff inspector modal displaying full Before and After JSON states.
+
+### Acceptance Criteria Verification
+
+- **Next.js Production Build (`npm run build`)**: **PASSED (0 Errors)**
+  ```text
+  Route (app)                              Size     First Load JS
+  ┌ ○ /                                    6 kB           93.3 kB
+  ├ ○ /_not-found                          873 B          88.1 kB
+  ├ ○ /audit                               4.08 kB        91.3 kB
+  ├ ○ /decisions                           4.47 kB        91.7 kB
+  ├ ○ /graph                               5.25 kB        92.5 kB
+  ├ ○ /ingestion                           3.95 kB        91.2 kB
+  └ ○ /reviews                             4.53 kB        91.8 kB
+  + First Load JS shared by all            87.3 kB
+  ✓ Generating static pages (9/9)
+  ```
+- **Backend Automated Test Suite**: **48 / 48 PASSED (100% in 8.38s)**
+- **Legacy Streamlit App**: Still fully functional on port 8501.
+
+
 
 
 
