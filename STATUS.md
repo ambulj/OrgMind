@@ -762,5 +762,73 @@ PS C:\Users\sauja\Downloads\New folder> python scripts/preflight.py
 - **Mypy Type Checking**: **Success: no issues found in 12 core source files**
 - **Legacy Streamlit App**: **HTTP 200 OK**
 
+---
+
+## 📥 Phase 6: Ingestion Service (Connectors, 8-Stage Pipeline, Review Queue & Superseding)
+
+**Completion Date**: 2026-10-18 10:25 UTC  
+**Capabilities Delivered**:
+
+1. **Connector Interface Contract (`BaseConnector`)**:
+   - Standardized interface defining `list_changes(since)`, `fetch(item)`, and `normalise(payload) -> NormalisedItem` in [`packages/core/orgmind/ingest/connectors/base.py`](file:///c:/Users/sauja/Downloads/New%20folder/packages/core/orgmind/ingest/connectors/base.py).
+   - Enforces cryptographic SHA-256 content hashing (`NormalisedItem.compute_hash`) and explicit role-based access visibility tags.
+2. **Implemented Connectors**:
+   - **`FileUploadConnector`**: Ingests Markdown with YAML frontmatter, plain text, and Adobe PDF via `pypdf.PdfReader` with page-by-page extraction.
+   - **`WatchedFolderConnector`**: Monitors a designated local directory (`data/watched`) for file modifications (`st_mtime > since`), auto-streaming changes into the pipeline.
+   - **`SampleDataConnector`**: Ingests repository seed datasets (ADR markdown documents, Slack chat logs in JSONL, tickets in JSON, employee directory in CSV).
+3. **Future Connector Architectural Contracts (`docs/CONNECTORS.md`)**:
+   - Detailed technical specifications for enterprise integrations in [`docs/CONNECTORS.md`](file:///c:/Users/sauja/Downloads/New%20folder/docs/CONNECTORS.md):
+     - **Slack Enterprise Grid**: OAuth 2.0 Webhooks, public vs private channel ACL mapping (`visibility: ["Admin", "Auditor"]`).
+     - **Google Workspace Drive**: Service Account / Drive Changes API, permissions synchronization to OrgMind visibility tags.
+     - **Atlassian Jira Cloud**: 3LO OAuth / Webhook dispatch, security-level ticket isolation.
+     - **GitHub Enterprise**: GitHub App installation tokens, repository team access synchronization.
+4. **8-Stage Retryable Ingestion Pipeline (`IngestionPipeline`)**:
+   - `fetch`: Downloads raw byte payload via connector.
+   - `normalise`: Produces standardized `NormalisedItem` with SHA-256 `content_hash`.
+   - `chunk`: Splits text into grounded units with deterministic identifiers (`SRC_{hash[:10]}_{idx}`).
+   - `extract`: Strict JSON decision and topic extraction with 1 automated retry.
+   - `resolve_entities`: Resolves authors and mentions against `EntityResolver`. Unknown people are flagged for review and **NEVER auto-created as phantom Person nodes**.
+   - `detect_conflicts`: Analyzes whether extracted decisions conflict with or reverse existing active decisions in FalkorDB.
+   - `stage_review_or_commit`: Policy gate staging conflicting or low-confidence items into `ReviewItem` table (`status="pending"`, before/after diff) while halting automatic graph mutation.
+   - `write_to_graph`: Strictly idempotent graph write with SHA-256 pre-check (`noop_idempotent` with zero mutations if file hash is unchanged).
+5. **Background Worker & Job Queue Architecture (`apps/worker`)**:
+   - Selected `arq` over `RQ` due to native `asyncio` + `redis.asyncio` support and complete cross-platform Windows compatibility (resolving `NEEDS CHECK`).
+   - Configured `WorkerSettings` pointing to dedicated Redis jobs queue (`settings.REDIS_JOBS_URL` on port 6380) with in-process `asyncio.to_thread` fallback for local zero-dependency testing.
+6. **Human-in-the-Loop Review Approval with Multi-hop Impact Traversal**:
+   - `POST /api/v1/reviews/{id}/action` with `action="approve"`:
+     - Applies `:SUPERSEDES` relationship in FalkorDB.
+     - Transitions previous active decision from `current` to `superseded` with `valid_to` timestamp.
+     - Executes `impact_analysis` tracing affected tickets, blocked tickets, impacted projects, and responsible personnel.
+     - Records an immutable audit log entry in the relational `audit_logs` table.
+7. **Freshness & Staleness Metric (`calculate_staleness`)**:
+   - Traverses 1-2 hop neighborhood to locate the most recent grounded evidence timestamp.
+   - Categorizes entity staleness into tiers (`Fresh` <= 60d, `Aging` <= 180d, `Stale` > 180d).
+
+### Acceptance Criteria Verification
+
+- **Automated Tests**: **48 / 48 PASSED (100% in 7.11s)**
+  - `tests/test_ingestion_service.py`: **7 / 7 PASSED (100% in 1.26s)**
+    - `test_file_upload_connector_formats`: **PASSED** (handles md, txt, pdf)
+    - `test_watched_folder_connector`: **PASSED** (detects modified files)
+    - `test_sample_data_connector_catalog`: **PASSED** (catalogues data directory)
+    - `test_idempotent_ingestion_changes_nothing`: **PASSED** (ingesting same file twice returns `noop_idempotent` with zero graph node/edge changes)
+    - `test_reversal_message_produces_pending_review`: **PASSED** (reversal produces pending `ReviewItem` with before/after diff)
+    - `test_approving_review_supersedes_decision_and_lists_impact`: **PASSED** (approval supersedes old decision and returns multi-hop impact report of affected/blocked tickets)
+    - `test_unknown_people_queued_for_review_never_auto_created`: **PASSED** (unknown persons queued as `unknown_alias` and zero phantom Person nodes created in FalkorDB)
+  - `tests/test_prompt_injection.py`: **6 / 6 PASSED**
+  - `tests/test_api.py`: **10 / 10 PASSED**
+  - `tests/test_domain_upgrade.py`: **7 / 7 PASSED**
+  - `tests/test_auth.py`: **4 / 4 PASSED**
+  - `tests/test_tools.py`: **6 / 6 PASSED**
+  - `tests/test_resolve.py`: **4 / 4 PASSED**
+  - `tests/test_workspace_isolation.py`: **2 / 2 PASSED**
+  - `tests/test_backup_restore.py`: **1 / 1 PASSED**
+  - `tests/test_citation_validator.py`: **2 / 2 PASSED**
+- **Ruff Linter**: **All checks passed!**
+- **Mypy Type Checking**: **Success: no issues found in 23 source files**
+- **Smoke Test**: **ALL CHECKS PASSED (EXIT 0)**
+- **Legacy Streamlit App**: **HTTP 200 OK**
+
+
 
 

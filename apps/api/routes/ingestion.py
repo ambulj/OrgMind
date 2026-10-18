@@ -1,9 +1,12 @@
 """Ingestion jobs and connector dispatch endpoints."""
 
 import uuid
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from orgmind.auth import WorkspaceContext
+from orgmind.ingest.pipeline import run_ingestion_job
+from orgmind.ingest.worker import enqueue_ingestion_task
 from orgmind.models import IngestionJob, Role
 from sqlalchemy.orm import Session
 
@@ -13,9 +16,26 @@ from apps.api.schemas import IngestionJobCreate, IngestionJobResponse, Paginated
 router = APIRouter(prefix="/ingestion", tags=["Ingestion Service"])
 
 
+def _job_to_response(job: IngestionJob) -> IngestionJobResponse:
+    """Helper to convert SQLAlchemy IngestionJob to pydantic IngestionJobResponse with explicit typing."""
+    return IngestionJobResponse(
+        id=str(job.id),
+        workspace_id=str(job.workspace_id),
+        connector_type=str(job.connector_type),
+        source_uri=str(job.source_uri),
+        status=str(job.status),
+        items_processed=int(job.items_processed or 0),
+        items_failed=int(job.items_failed or 0),
+        error_message=str(job.error_message) if job.error_message else None,
+        created_at=job.created_at.isoformat() if job.created_at else "",
+        completed_at=job.completed_at.isoformat() if job.completed_at else None,
+    )
+
+
 @router.post("/jobs", response_model=IngestionJobResponse)
 def trigger_ingestion_job(
     payload: IngestionJobCreate,
+    sync: bool = Query(False, description="Run synchronously before returning"),
     ctx: WorkspaceContext = Depends(require_role(Role.EDITOR)),
     session: Session = Depends(get_db_session),
 ) -> IngestionJobResponse:
@@ -32,18 +52,83 @@ def trigger_ingestion_job(
     session.add(job)
     session.commit()
 
-    return IngestionJobResponse(
-        id=job.id,
-        workspace_id=job.workspace_id,
-        connector_type=job.connector_type,
-        source_uri=job.source_uri,
-        status=job.status,
-        items_processed=job.items_processed,
-        items_failed=job.items_failed,
-        error_message=job.error_message,
-        created_at=job.created_at.isoformat(),
-        completed_at=job.completed_at.isoformat() if job.completed_at else None,
+    if sync:
+        run_ingestion_job(
+            job_id=str(job.id),
+            connector_type=str(job.connector_type),
+            source_uri=str(job.source_uri),
+            workspace_id=str(job.workspace_id),
+            db_session=session,
+        )
+        session.refresh(job)
+    else:
+        import asyncio
+
+        asyncio.create_task(
+            enqueue_ingestion_task(
+                job_id=str(job.id),
+                connector_type=str(job.connector_type),
+                source_uri=str(job.source_uri),
+                workspace_id=str(job.workspace_id),
+            )
+        )
+
+    return _job_to_response(job)
+
+
+@router.post("/upload", response_model=IngestionJobResponse)
+async def upload_and_ingest_file(
+    file: UploadFile = File(...),
+    sync: bool = Query(True, description="Run pipeline synchronously for immediate feedback"),
+    ctx: WorkspaceContext = Depends(require_role(Role.EDITOR)),
+    session: Session = Depends(get_db_session),
+) -> IngestionJobResponse:
+    """Uploads a document (.md, .txt, .pdf) and triggers the multi-stage ingestion pipeline."""
+    filename = file.filename or "uploaded_file.txt"
+    ext = Path(filename).suffix.lower()
+    if ext not in (".md", ".txt", ".pdf"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported file format '{ext}'. Allowed: .md, .txt, .pdf",
+        )
+
+    upload_dir = Path("data/uploads") / ctx.workspace_id
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    saved_path = upload_dir / filename
+
+    content_bytes = await file.read()
+    saved_path.write_bytes(content_bytes)
+
+    job = IngestionJob(
+        id=f"job_up_{uuid.uuid4().hex[:8]}",
+        workspace_id=ctx.workspace_id,
+        connector_type="file_upload",
+        source_uri=str(saved_path),
+        status="pending",
+        items_processed=0,
+        items_failed=0,
     )
+    session.add(job)
+    session.commit()
+
+    if sync:
+        run_ingestion_job(
+            job_id=str(job.id),
+            connector_type="file_upload",
+            source_uri=str(saved_path),
+            workspace_id=str(job.workspace_id),
+            db_session=session,
+        )
+        session.refresh(job)
+    else:
+        await enqueue_ingestion_task(
+            job_id=str(job.id),
+            connector_type="file_upload",
+            source_uri=str(saved_path),
+            workspace_id=str(job.workspace_id),
+        )
+
+    return _job_to_response(job)
 
 
 @router.get("/jobs", response_model=PaginatedResponse[IngestionJobResponse])
@@ -63,22 +148,7 @@ def list_ingestion_jobs(
         .all()
     )
 
-    items = [
-        IngestionJobResponse(
-            id=j.id,
-            workspace_id=j.workspace_id,
-            connector_type=j.connector_type,
-            source_uri=j.source_uri,
-            status=j.status,
-            items_processed=j.items_processed,
-            items_failed=j.items_failed,
-            error_message=j.error_message,
-            created_at=j.created_at.isoformat(),
-            completed_at=j.completed_at.isoformat() if j.completed_at else None,
-        )
-        for j in jobs
-    ]
-
+    items = [_job_to_response(j) for j in jobs]
     total_pages = (total + page_size - 1) // page_size if total > 0 else 1
     return PaginatedResponse(
         items=items,
@@ -103,15 +173,4 @@ def get_ingestion_job(
             detail=f"Ingestion job '{job_id}' not found.",
         )
 
-    return IngestionJobResponse(
-        id=job.id,
-        workspace_id=job.workspace_id,
-        connector_type=job.connector_type,
-        source_uri=job.source_uri,
-        status=job.status,
-        items_processed=job.items_processed,
-        items_failed=job.items_failed,
-        error_message=job.error_message,
-        created_at=job.created_at.isoformat(),
-        completed_at=job.completed_at.isoformat() if job.completed_at else None,
-    )
+    return _job_to_response(job)

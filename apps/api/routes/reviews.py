@@ -1,11 +1,14 @@
 """Human-in-the-loop review queue endpoints."""
 
+import hashlib
 import json
+import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from orgmind.auth import WorkspaceContext
-from orgmind.models import ReviewItem, Role
+from orgmind.freshness import apply_decision, impact_analysis
+from orgmind.models import AuditLog, ReviewItem, Role
 from sqlalchemy.orm import Session
 
 from apps.api.dependencies import get_db_session, get_workspace_context, require_role
@@ -100,6 +103,66 @@ def act_on_review_item(
 
     if action == "edit" and payload.edited_payload:
         item.payload = json.dumps(payload.edited_payload)
+
+    elif action == "approve":
+        payload_data = {}
+        try:
+            payload_data = json.loads(item.payload)
+        except Exception:
+            payload_data = {}
+
+        if item.item_type in ("decision_reversal", "decision_supersession"):
+            topic = payload_data.get("topic", "General")
+            proposed_text = payload_data.get("proposed_text", "")
+            source_id = payload_data.get("source_id") or f"SRC_REV_{item.id}"
+            source_uri = payload_data.get("source_uri", "manual_review")
+            decided_by = payload_data.get("decided_by")
+            now_iso = datetime.now(UTC).isoformat()
+            new_dec_id = f"DEC_REV_{hashlib.md5((topic + proposed_text).encode()).hexdigest()[:8].upper()}"
+
+            apply_res = apply_decision(
+                decision_id=new_dec_id,
+                topic=topic,
+                text=proposed_text,
+                source_id=source_id,
+                source_file=source_uri,
+                source_snippet=proposed_text,
+                chunk_offset=0,
+                decided_by_person_id=decided_by,
+                timestamp=now_iso,
+            )
+
+            # Multi-hop impact analysis
+            impact_res = impact_analysis(topic)
+
+            payload_data["graph_execution"] = {
+                "status": "applied",
+                "new_decision_id": new_dec_id,
+                "superseded_decision_id": apply_res.get("superseded_decision_id"),
+                "applied_at": now_iso,
+            }
+            payload_data["impact_report"] = {
+                "affected_tickets": impact_res.get("affected_tickets", []),
+                "blocked_tickets": impact_res.get("blocked_tickets", []),
+                "affected_projects": impact_res.get("affected_projects", []),
+                "responsible_people": impact_res.get("responsible_people", []),
+            }
+            item.payload = json.dumps(payload_data)
+
+            # Audit log
+            audit_entry = AuditLog(
+                id=f"audit_{uuid.uuid4().hex[:10]}",
+                workspace_id=ctx.workspace_id,
+                actor_id=ctx.user_id,
+                actor_email=ctx.user_email,
+                action="approve_decision_reversal",
+                entity_type="Decision",
+                entity_id=new_dec_id,
+                before_state=item.before_diff,
+                after_state=item.after_diff,
+                reason=f"Approved decision reversal for {topic} superseding {apply_res.get('superseded_decision_id')}",
+            )
+            session.add(audit_entry)
 
     session.commit()
 

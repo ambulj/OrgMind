@@ -504,3 +504,59 @@ def ingest_live_decision(file_path: str = "data/live/new_billing_decision.json")
     Used for Demo Moment C.
     """
     return commit_decision(file_path)
+
+
+def calculate_staleness(
+    entity_id: str,
+    workspace_id: str | None = None,
+) -> dict[str, Any]:
+    """Computes staleness metric for an entity based on its most recent grounded evidence date.
+
+    Returns:
+        Structured staleness metric including days since last evidence,
+        staleness tier ('Fresh', 'Aging', 'Stale'), and recent activity count.
+    """
+    clean_id = entity_id.strip()
+
+    # Query last evidence timestamps across connected sources, messages, and tickets
+    cypher = """
+    MATCH (n {id: $id})
+    OPTIONAL MATCH (n)-[:DERIVED_FROM|AUTHORED|OWNS|ASSIGNED_TO|MENTIONS*1..2]-(item)
+    WHERE item.created_at IS NOT NULL OR item.valid_from IS NOT NULL OR item.timestamp IS NOT NULL
+    RETURN coalesce(item.created_at, item.valid_from, item.timestamp) AS event_date
+    ORDER BY event_date DESC
+    LIMIT 10
+    """
+    rows = query_graph(cypher, {"id": clean_id}, workspace_id=workspace_id)
+
+    last_evidence_date: str | None = None
+    if rows and rows[0].get("event_date"):
+        last_evidence_date = str(rows[0]["event_date"])
+
+    now = datetime.now(UTC)
+    days_stale = 0
+    tier = "Fresh"
+
+    if last_evidence_date:
+        try:
+            parsed_date = datetime.fromisoformat(last_evidence_date[:10]).replace(tzinfo=UTC)
+            days_stale = max(0, (now - parsed_date).days)
+            if days_stale > 180:
+                tier = "Stale"
+            elif days_stale > 60:
+                tier = "Aging"
+            else:
+                tier = "Fresh"
+        except Exception:
+            days_stale = 0
+            tier = "Fresh"
+    else:
+        tier = "Unknown"
+
+    return {
+        "entity_id": clean_id,
+        "last_evidence_date": last_evidence_date,
+        "days_since_last_evidence": days_stale,
+        "staleness_tier": tier,
+        "evidence_count": len(rows),
+    }

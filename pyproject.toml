@@ -17,6 +17,8 @@ dependencies = [
     "streamlit>=1.36.0",
     "pyvis>=0.3.2",
     "mcp>=1.0.0",
+    "pypdf>=6.0.0",
+    "arq>=0.28.0",
 ]
 
 [project.optional-dependencies]
