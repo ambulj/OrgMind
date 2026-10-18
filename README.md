@@ -1,3 +1,14 @@
+---
+title: OrgMind
+emoji: 🧠
+colorFrom: indigo
+colorTo: blue
+sdk: docker
+app_port: 7860
+pinned: false
+license: mit
+---
+
 # 🧠 OrgMind: Enterprise Company Brain & Knowledge Graph Platform
 
 [![Monorepo](https://img.shields.io/badge/Monorepo-Packages%20%26%20Apps-blue.svg)](#)
